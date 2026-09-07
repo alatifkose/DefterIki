@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Sanal ortam / uv
+.venv/
+.uv/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# Arac onbellekleri
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
