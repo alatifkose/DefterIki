@@ -8,10 +8,11 @@ tasarlanıyor; iş kuralları ikisinden de bağımsız bir çekirdekte toplanır
 
 ## Durum
 
-**İskelet aşaması.** Altyapı kurulu ve kalite kapıları çalışıyor; alan modelleri ve iş
-kuralları henüz yazılmadı. Bugün depoda olan: paket iskeleti, veri konumu ayarları
-(`ayarlar.py`), Alembic kurulumu (henüz migration yok), test/lint/tip denetimi zinciri ve
-karar/bulgu defterleri.
+**İskelet aşaması, inşa öncesi kararlar verildi.** Altyapı kurulu ve kalite kapıları
+çalışıyor; alan modelleri henüz yazılmadı. 8 Eylül 2026'da inşadan önce verilmesi gereken
+kararlar alındı (K-006..K-009): belge tek doğruluk kaynağı, veri sözleşmesi (para/tarih/
+kimlik/yaşam durumu), katmanlı düzen ve başlangıç konusu olarak **hesap ekstresi**.
+Açıkta kalan tek karar A-006 (aynı hareketin iki belgede görünmesi).
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.

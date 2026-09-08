@@ -134,6 +134,106 @@ yeniden kuruldu; 13 test, ruff ve pyright yeni konumda doğrulandı.
 
 ---
 
+## K-006 — Belge tek doğruluk kaynağıdır; kayıt belgeden türetilir
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Finansal kayıtlar belgeden türetilir ve elle değiştirilmez. Bir kayıt yanlış
+çıkarsa iki yol vardır: okuma kuralı düzeltilip belge **yeniden işlenir**, ya da kaydın
+yanına ayrı bir düzeltme notu eklenir. Belge her zaman yeniden işlenebilir olmalıdır; aynı
+belge aynı kuralla işlenince aynı kayıtlar çıkar. Aynı dosya (aynı SHA-256) ikinci kez
+yüklenirse reddedilir.
+
+**Gerekçe:** Yanlış kuralla yazılmış veriyi geri almak, kodu geri almaktan pahalıdır.
+Kayıt belgeye bağlı kalırsa geri alma "belgeyi yeniden işle"ye iner; elle veri ameliyatına
+gerek kalmaz. A-005 bu kararla kapanır.
+
+**Reddedilen alternatif:** Kayıt ekrandan elle düzeltilir, belge yalnız "buradan geldi"
+referansıdır. Defter bunu seçti; kayıtlar belgeden koptu, geri alma her modülün içini
+tanımak zorunda kaldı (`belgeler/geri_alma.py`, 49 fonksiyon-içi import).
+
+---
+
+## K-007 — Veri sözleşmesi: para, tarih, kimlik, yaşam durumu
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:**
+
+- *Para.* Tutar kuruş tamsayıdır (K-001). Her tutarın yanında bir **varlık kodu** bulunur
+  (TL, USD, gram altın; ileride hisse). Kod yalnız para birimi değil, varlık türüdür:
+  yatırım hesapları gelince tabloya dokunulmaz. Giriş/çıkış yönü tutarın işaretiyle değil,
+  **ayrı bir yön alanıyla** tutulur; tutar her zaman pozitiftir.
+- *Tarih.* Hareketin belgedeki tarihi (gün) zorunludur; saat ayrı ve isteğe bağlı bir
+  alandır. Saat, hareketin kendi belgesinde yoksa ama aynı hareketi gösteren başka bir
+  belgede varsa (kart ekstresi satırı + fiş) oradan tamamlanır. Kaydın programa girdiği
+  an ayrı tutulur; ikisi karıştırılmaz. Tarih ISO metin (`YYYY-MM-DD`), zaman damgaları
+  UTC ISO metin olarak saklanır.
+- *Kimlik.* Tablo birincil anahtarları tamsayıdır (tek kullanıcı, tek dosya). Belgenin
+  kimliği SHA-256'dır.
+- *Yaşam durumu.* Finansal kayıt fiziksel olarak silinmez. İptal edilebilir varlıklar bir
+  yaşam durumu taşır: **AKTIF / IPTAL / YERINI_DEVRETTI**. Belge yeniden işlenince eski
+  kayıtlar YERINI_DEVRETTI olur, yenileri AKTIF. Bu alan her tabloya körlemesine
+  konmaz; hangi varlığın gerçekten iptal edilebileceği o varlık tanımlanırken ayrıca
+  kararlaştırılır ve burada not edilir.
+
+**Gerekçe:** Bu dördü sonradan değiştirilince her tabloya ve eldeki her satıra dokunur.
+Para birimi ve yön alanı sonradan eklenemez; tarih biçimi sonradan tekleştirilemez;
+"gerçekten sil"den "pasife al"a dönüş Defter'de pahalı olmuştu.
+
+**Reddedilen alternatifler:** İşaretli tek tutar (okurken ve sorgularken hata kaynağı);
+yalnız TL (döviz ve altın hesabı var); her tabloya `is_active` (körleme, anlamsız
+sütunlar); fiziksel silme (finansal iz kaybolur).
+
+---
+
+## K-008 — Katmanlı düzen: bağımlılık tek yöne akar
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Paket üç bölgeye ayrılır: `cekirdek/` (iş kuralları), `mcp/` (Cowork kapısı),
+`arayuz/` (masaüstü ekranları). `mcp` ve `arayuz` çekirdeğe sorar; çekirdek onları tanımaz.
+Çekirdek kendi içinde üç kata bölünür, aşağıdan yukarı:
+
+1. **temel:** bankalar, belgeler, para/tarih tipleri, veritabanı motoru.
+2. **urunler:** hesaplar, kartlar, krediler, KMH. Her ürün yalnız temeli tanır;
+   ürünler **birbirini tanımaz**.
+3. **yorum:** eşleştirme, giderler, işleme, raporlar. Alttaki katları tanır.
+
+Kural: bir modül yalnız kendi katının altındakileri içe alabilir; aynı kattaki ürünler
+birbirine uzanamaz; fonksiyon içi `import` yasaktır. Kural `tests/test_katmanlar.py` ile
+korunur; çiğnendiğinde test kırılır. A-003 bu kararla kapanır.
+
+Gerçek hayat ilişkileri bu düzende şöyle durur: kart bankayı tanır (temel), banka kartı
+tanımaz; ödeme ile hesap hareketini bağlayan eşleştirme yorum katındadır, hesaplar da
+kartlar da ödemeyi bilmez; belge modülü ürünleri tanımaz, her ürünün kendi okuyucusu
+belgeyi tanır, "şu belgeyi işle" emrini yorum katındaki işleme modülü verir; gider,
+hareketin üstüne yazılan etikettir, giderler kartı tanır, kartlar gideri tanımaz.
+
+**Gerekçe:** Defter'de 12 modülün çoğu 9-12 modül tarafından içe alınıyordu ve karşılıklı
+döngüler vardı; 247 fonksiyon-içi import bu döngülerden kaçmak için yazılmıştı. Tek yönlü
+akış, yanlış çıkan parçanın tek başına atılabilmesini sağlar.
+
+**Reddedilen alternatif:** "Konular birbirini hiç tanımaz." Gerçek ilişkileri (kart→banka,
+gider→hareket) yasaklar; uygulanamaz. Tek yön yeterli, döngü yasak.
+
+---
+
+## K-009 — Başlangıç konusu: hesap ekstresi
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** İlk yazılacak ürün **hesap ekstresi**dir: tek belge, tek ürün. Mekanizma
+(belge → kayıt → yeniden işleme) burada oturduktan sonra kredi kartı ekstresi gelir.
+
+**Gerekçe:** En basit belge türü ve içinde hazır bir doğruluk kontrolü var: açılış
+bakiyesi + hareketler = kapanış bakiyesi. Okuma yanlışsa hemen belli olur.
+
+**Reddedilen alternatif:** Kredi kartı ekstresi ile başlamak. Acil ihtiyaca daha yakın ama
+taksit, dönem ve kesim tarihi ilk denemede daha çok şeyin ters gitmesine yol açar.
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**
@@ -143,9 +243,10 @@ Kovasız açık madde bırakılmaz.
 |---|-------|------|-----|
 | A-001 | pre-commit kancaları Cowork'ün kabuğundan çalışmıyor | şimdilik kabul | Kod commit'leri Windows tarafından alınır; bkz. `BULGULAR.md` B-003 |
 | A-002 | Claude Desktop'ın güvenilen klasör kaydı hâlâ eski OneDrive yolunu gösteriyor | yapılacak | Uygulamadan klasör yeniden bağlanacak: `C:\dev\DefterIki`. Kayıt `preferences.localAgentModeTrustedFolders` içinde |
-| A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | yapılacak | K-002 yazılı ama `src/defteriki/` altında yapı yok. Kararlaştırılan iki ilke aşağıda |
+| A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | kapandı | K-008 ile karara bağlandı, `tests/test_katmanlar.py` koruyor |
 | A-004 | İki konuya birden değen kural nereye yazılır | yapılacak | Şimdi kararlaştırılmıyor: ilk gerçek örnek çıktığında, somut vaka elde varken verilecek |
-| A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | yapılacak | Kuralı yanlış çıkanı geri almanın ucuz olması buna bağlı; elle veri düzeltme yerine belgeyi yeniden işleme |
+| A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | kapandı | K-006 ile karara bağlandı |
+| A-006 | Aynı hareket iki belgede görünürse (hesap ekstresindeki kart ödemesi + kart ekstresindeki aynı ödeme) ne olur | yapılacak | Abdüllatif kararı erteledi. Masadaki öneri: her belge kendi kaydını yazar, ikisini bağlayan ayrı bir eşleştirme katmanı olur (öneri → onay → bozulabilir). Aynı mekanizma bir belgenin eksiğini (saat) başka belgeden tamamlamak için de gerekir (K-007). Hesap ekstresi tek başına bu kararı gerektirmiyor; kart gelmeden önce verilecek |
 
 ---
 
@@ -182,5 +283,6 @@ etmek. Kendi çekincesi: bu bir geri alma döngüsü yaratabilir.
 - Sinyal: aynı şey üçüncü kez geri alınıyorsa sorun kodda değildir; cevaplanmamış bir soru
   vardır, orada durulur.
 
-**Kalan soru.** Hangi konudan başlanacağı (tek bir ürün: yalnız kredi kartı ya da yalnız
-hesap hareketi) seçilmedi.
+**Sonuç (8 Eylül 2026, ikinci oturum).** İki ilke K-008 oldu; başlangıç konusu K-009 ile
+hesap ekstresi seçildi. Belge–kayıt yönü K-006, veri sözleşmesi K-007. Açıkta kalan tek
+soru A-006 (aynı hareketin iki belgede görünmesi).
