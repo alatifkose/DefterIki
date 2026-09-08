@@ -60,6 +60,42 @@ depoyla birlikte taşınır.
 
 ---
 
+## K-004 — Veritabanı yolunun tek sahibi `ayarlar` modülüdür
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Canlı veritabanının yeri yalnızca `src/defteriki/ayarlar.py` içinde tanımlanır.
+`alembic.ini` içindeki `sqlalchemy.url` **boş bırakılır**; `alembic/env.py` adresi
+`ayarlar.veritabani_url()` ile alır ve motoru kendisi kurar. Varsayılan konum
+`%LOCALAPPDATA%\DefterIki\defteriki.sqlite3`, Windows dışında XDG karşılığıdır; yol
+`DEFTERIKI_VERITABANI` ortam değişkeniyle ezilebilir (testler bunu kullanır). Yol her
+zaman mutlaktır ve adres POSIX ayracıyla yazılır.
+
+**Gerekçe:** Üç ayrı sorun aynı satırdan doğuyordu (`sqlalchemy.url = sqlite:///defteriki.db`):
+
+1. *Yol göreliydi.* Çalışma dizinine göre çözüldüğü için masaüstü kısayolu, MCP süreci ve
+   `pytest` üç farklı veritabanı dosyasıyla çalışabilirdi. Defter'de tam bu nedenle MCP
+   sunucusu ile uygulama ayrı yedek kümesi oluşturmuştu.
+2. *İki doğruluk kaynağı doğacaktı.* `alembic.ini` bir adres, uygulama motoru başka bir
+   adres bilecekti; bugün aynı olan bu iki değer ilerde ayrışır ve göç bir dosyaya,
+   uygulama başka dosyaya yazar — üstelik sessizce.
+3. *Dosya OneDrive'ın içindeydi.* Depo kökündeki `defteriki.db`, bulut senkronu ile
+   SQLite'ın WAL dosyalarını yan yana getiriyordu; bu bilinen bir veri bozulması yoludur.
+
+**Reddedilen alternatifler:**
+- *`alembic.ini` olduğu gibi kalsın, yalnız elle `alembic` çağrıları için kullanılsın;
+  uygulama kendi yolunu hesaplasın.* İki kaynak sorununu (2) doğrudan doğurur.
+- *Ortam değişkeni tek kaynak olsun.* Değişken tanımsızken yine bir varsayılan gerekir ve o
+  varsayılan zaten kodda olmak zorundadır; bu, seçilen çözümün daha zayıf hâlidir. Değişken
+  ezme yolu olarak korundu.
+
+**Nasıl korunuyor:** `tests/test_alembic_yolu.py` gerçek bir `alembic upgrade head` koşturur;
+göçün ortam değişkeninin gösterdiği dosyaya yazdığını, çalışma dizininden bağımsız olduğunu
+ve depo köküne hiçbir veritabanı dosyası düşmediğini doğrular. `alembic.ini` içindeki adresin
+boş kaldığı da sınanır. Kural bozulduğunda üç test birden kırılır (mutasyonla doğrulandı).
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**

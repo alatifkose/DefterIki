@@ -8,9 +8,10 @@ tasarlanıyor; iş kuralları ikisinden de bağımsız bir çekirdekte toplanır
 
 ## Durum
 
-**İskelet aşaması.** Altyapı kurulu ve kalite kapıları çalışıyor; uygulama mantığı henüz
-yazılmadı. Bugün depoda olan: paket iskeleti, Alembic kurulumu (henüz migration yok),
-test/lint/tip denetimi zinciri ve karar/bulgu defterleri.
+**İskelet aşaması.** Altyapı kurulu ve kalite kapıları çalışıyor; alan modelleri ve iş
+kuralları henüz yazılmadı. Bugün depoda olan: paket iskeleti, veri konumu ayarları
+(`ayarlar.py`), Alembic kurulumu (henüz migration yok), test/lint/tip denetimi zinciri ve
+karar/bulgu defterleri.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -57,17 +58,31 @@ Tip denetimi (strict):
 uv run pyright
 ```
 
-Şema göçü (henüz migration yok):
+Şema göçü (henüz migration yok; veritabanını aşağıdaki "Veri konumu" yoluna kurar):
 
 ```powershell
 uv run alembic upgrade head
 ```
 
+## Veri konumu
+
+| Ne | Nerede |
+|---|---|
+| Canlı veritabanı | `%LOCALAPPDATA%\DefterIki\defteriki.sqlite3` |
+
+Yol `DEFTERIKI_VERITABANI` ortam değişkeniyle değiştirilebilir; testler bunu kullanır.
+Windows dışında (CI, Linux kabuğu) XDG karşılığına düşer.
+
+Yolun **tek sahibi** `src/defteriki/ayarlar.py` modülüdür; `alembic.ini` içindeki
+`sqlalchemy.url` bu yüzden bilerek boştur ve `alembic/env.py` adresi ayarlardan alır
+(K-004). Canlı veritabanı OneDrive'ın içine konmaz: bulut senkronu ile SQLite'ın WAL
+dosyaları birlikte veri bozulmasına yol açar.
+
 ## Klasör düzeni
 
 | Yol | İçerik |
 |---|---|
-| `src/defteriki/` | Uygulama paketi |
+| `src/defteriki/` | Uygulama paketi (`ayarlar.py`: yol ve ortam kararları) |
 | `tests/` | Testler |
 | `alembic/` | Şema göçleri (`versions/` bugün boş) |
 | `KARARLAR.md` | Mimari karar defteri: karar, gerekçe, reddedilen alternatif |
