@@ -9,6 +9,8 @@ gelir (K-004).
 SQLite'ta `foreign_keys` **bağlantı başına** açılır ve varsayılanı kapalıdır; buradaki
 dinleyici her yeni bağlantıda açar. `busy_timeout` MCP süreci ile masaüstü uygulaması
 aynı dosyayı aynı anda kullandığında "database is locked" hatasını önler.
+`synchronous=NORMAL` WAL ile birlikte güvenlidir (çökmede son işlemler kaybolabilir,
+dosya bozulmaz) ve her commit'te tam disk senkronu beklemez.
 """
 
 from __future__ import annotations

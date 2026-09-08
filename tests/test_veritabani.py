@@ -30,6 +30,11 @@ def test_mesgul_bekleme(motor: Engine) -> None:
     assert _pragma(motor, "busy_timeout") == veritabani.MESGUL_BEKLEME_MS
 
 
+def test_synchronous_normal(motor: Engine) -> None:
+    """WAL ile NORMAL (1) guvenlidir; FULL (2) her commit'te disk senkronu bekler."""
+    assert _pragma(motor, "synchronous") == 1
+
+
 def test_yabanci_anahtar_gercekten_uygulanir(motor: Engine) -> None:
     """Pragma degeri 1 gorunse de uygulanmiyor olabilir; ihlali dene."""
     with motor.begin() as b:

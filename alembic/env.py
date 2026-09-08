@@ -9,8 +9,11 @@ from defteriki.cekirdek.temel.model import Temel
 # Alembic Config nesnesi: alembic.ini icindeki degerlere erisim saglar.
 config = context.config
 
+# disable_existing_loggers=False: fileConfig varsayilanda o ana kadar acilmis tum
+# logger'lari kapatir. Testler gocleri surec icinde kosturdugundan (conftest) uygulamanin
+# dosya loglamasi (K-001) her fiksturde sessizce susardi.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Tek metadata: tum modeller Temel'den turer (model.py). Autogenerate bunu hedef alir.
 target_metadata = Temel.metadata
