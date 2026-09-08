@@ -34,6 +34,6 @@ src = ["src"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "alembic"]
 typeCheckingMode = "strict"
 pythonVersion = "3.13"

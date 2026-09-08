@@ -49,9 +49,11 @@ verilmiş ama henüz bağımlılık olarak eklenmemiştir; sırası geldiğinde 
 
 ```powershell
 uv sync
+uv run pre-commit install
 ```
 
-Depo `C:\dev\DefterIki` altında, bulut senkronu yapılan bir klasörün **dışında** tutulur;
+İkinci komut commit kancasını kurar (ruff, ruff format, pyright); temiz bir klonda kanca
+kendiliğinden gelmez. Depo `C:\dev\DefterIki` altında, bulut senkronu yapılan bir klasörün **dışında** tutulur;
 yedek GitHub'dadır (K-005). Git ile OneDrive aynı klasörde iyi geçinmez.
 
 ## Komutlar
@@ -62,13 +64,14 @@ Test:
 uv run pytest
 ```
 
-Lint ve biçim:
+Lint ve biçim (`alembic/` dahil, pre-commit ile aynı kapsam):
 
 ```powershell
-uv run ruff check src tests
+uv run ruff check .
+uv run ruff format --check .
 ```
 
-Tip denetimi (strict):
+Tip denetimi (strict; `src`, `tests` ve `alembic`):
 
 ```powershell
 uv run pyright
@@ -105,7 +108,7 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
 | `src/defteriki/cekirdek/urunler/` | Hesaplar, kartlar, krediler... (henüz yok; her ürün ayrı alt paket) |
 | `src/defteriki/cekirdek/yorum/` | Eşleştirme, giderler, işleme, raporlar (henüz yok) |
 | `src/defteriki/mcp/`, `arayuz/` | Cowork kapısı ve masaüstü (henüz yok) |
-| `tests/` | Testler; `conftest.py` geçici veritabanını gerçek göçlerle açar |
+| `tests/` | Testler; `conftest.py` her teste geçici veri dizini verir (veritabanı + arşiv) ve şemayı gerçek göçlerle kurar |
 | `alembic/` | Şema göçleri (`versions/` bugün boş) |
 | `KARARLAR.md` | Mimari karar defteri: karar, gerekçe, reddedilen alternatif |
 | `BULGULAR.md` | Çalışma sırasında çıkan sorunlar ve durumları |
