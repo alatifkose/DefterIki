@@ -10,10 +10,19 @@ wheels/
 .venv/
 .uv/
 
-# SQLite
+# SQLite: veritabani dosyalari ve SQLite'in yanlarinda tuttugu WAL/SHM eslikcileri.
+# Canli veritabani depoda durmaz (K-004: %LOCALAPPDATA%\DefterIki altinda). Bu desenler
+# kazayla depoya dusen bir kopyanin commit'lenmesini engeller ve
+# tests/test_gitignore.py ile korunur.
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Arac onbellekleri
 .pytest_cache/
