@@ -27,10 +27,18 @@ KAPSAYICILAR = {"defteriki", "defteriki.cekirdek"}
 KATLAR: dict[str, int] = {
     "defteriki.ayarlar": 0,
     "defteriki.cekirdek.temel": 1,
+    "defteriki.kurumlar": 2,
+    "defteriki.urunler": 3,
+    "defteriki.belgeler": 4,
+    "defteriki.kayitlar": 5,
+    "defteriki.akislar": 6,
+    "defteriki.mcp": 7,
+    "defteriki.arayuz": 7,
+    # Asagidaki iki onek bugun bos; yalniz yardimci fonksiyonlarin oz-testinde
+    # (test_kural_ihlali_yakalanir) kullaniliyor. cekirdek/ altinda urunler veya
+    # yorum paketi acilmasi planlanmiyor.
     "defteriki.cekirdek.urunler": 2,
     "defteriki.cekirdek.yorum": 3,
-    "defteriki.mcp": 4,
-    "defteriki.arayuz": 4,
 }
 
 # Aynı katta "birim" sınırı: bu öneklerin hemen altındaki ilk alt paket ayrı birimdir.
