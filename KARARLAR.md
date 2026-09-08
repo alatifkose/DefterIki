@@ -144,6 +144,10 @@ yanına ayrı bir düzeltme notu eklenir. Belge her zaman yeniden işlenebilir o
 belge aynı kuralla işlenince aynı kayıtlar çıkar. Aynı dosya (aynı SHA-256) ikinci kez
 yüklenirse reddedilir.
 
+*Ek (8 Eylül 2026):* Belgeyi program değil AI okuyacağı için "aynı belge aynı kuralla aynı
+kayıtları çıkarır" cümlesi okuma adımı için geçerli değildir; determinizm doğrulama ve
+kayıt katmanında aranır. Bkz. K-010.
+
 **Gerekçe:** Yanlış kuralla yazılmış veriyi geri almak, kodu geri almaktan pahalıdır.
 Kayıt belgeye bağlı kalırsa geri alma "belgeyi yeniden işle"ye iner; elle veri ameliyatına
 gerek kalmaz. A-005 bu kararla kapanır.
@@ -169,8 +173,9 @@ tanımak zorunda kaldı (`belgeler/geri_alma.py`, 49 fonksiyon-içi import).
   belgede varsa (kart ekstresi satırı + fiş) oradan tamamlanır. Kaydın programa girdiği
   an ayrı tutulur; ikisi karıştırılmaz. Tarih ISO metin (`YYYY-MM-DD`), zaman damgaları
   UTC ISO metin olarak saklanır.
-- *Kimlik.* Tablo birincil anahtarları tamsayıdır (tek kullanıcı, tek dosya). Belgenin
-  kimliği SHA-256'dır.
+- *Kimlik.* Tablo birincil anahtarları tamsayıdır. Belgenin kimliği SHA-256'dır.
+  *Ek (8 Eylül 2026):* Ürün hedefi çok kullanıcılı olsa da bu tek başına UUID gerektirmez;
+  tamsayı anahtar kararı değişmez. Gerçek bir ihtiyaç doğarsa o gün ayrıca değerlendirilir.
 - *Yaşam durumu.* Finansal kayıt fiziksel olarak silinmez. İptal edilebilir varlıklar bir
   yaşam durumu taşır: **AKTIF / IPTAL / YERINI_DEVRETTI**. Belge yeniden işlenince eski
   kayıtlar YERINI_DEVRETTI olur, yenileri AKTIF. Bu alan her tabloya körlemesine
@@ -234,6 +239,71 @@ taksit, dönem ve kesim tarihi ilk denemede daha çok şeyin ters gitmesine yol 
 
 ---
 
+## K-010 — Belgeyi AI okur; determinizm doğrulama ve kayıt katmanındadır
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Belgeyi (hesap ekstresi, kart ekstresi...) şimdilik Cowork/AI okur ve yapılandırılmış
+bir **okuma** üretir: satırlar, tarihler, tutarlar, açılış ve kapanış bakiyesi. Programın
+belge okuyucusu yoktur. Determinizm okuma çıktısında **aranmaz**; doğrulama ve kayıt
+katmanında aranır:
+
+- Okuma, Pydantic modelleriyle doğrulanır (K-001: MCP girdisi ile servis girdisi aynı
+  model). Doğrulama sabittir; hesap ekstresinde açılış + hareketler = kapanış tutmuyorsa
+  okuma reddedilir.
+- Doğrulanan okuma belgeyle birlikte saklanır. Kayıtlar belgeden değil, **saklı okumadan**
+  türetilir; bu adım deterministiktir. "Belgeyi yeniden işle" saklı okumadan kayıt üretmektir,
+  AI'ya yeniden sormak değildir.
+- Belge yeniden okunursa yeni bir okuma sürümü doğar; eskisi YERINI_DEVRETTI olur (K-007).
+
+Ürünleşme aşamasında okuyucu değişebilir (program, başka bir model); değişen yalnız ilk
+adımdır, doğrulama ve kayıt katmanı aynı kalır.
+
+**Gerekçe:** Bugün uygulamayı Cowork işletiyor ve belgeyi zaten okuyabiliyor; ayrı bir PDF
+okuyucu yazmak ilk ürünü geciktirir. K-006'nın özü (geri alma = yeniden işleme, elle veri
+ameliyatı yok) okumanın saklanmasıyla korunur.
+
+**Reddedilen alternatif:** Programın kendi PDF okuyucusu. Deterministik ama banka başına
+ayrı kural ister; ilk belge türünde bile en çok zaman alan iş olurdu. Kapı kapalı değil.
+
+---
+
+## K-011 — Belge arşivi yolunun tek sahibi de `ayarlar` modülüdür
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Arşivlenen belgelerin dizini yalnız `src/defteriki/ayarlar.py` içinde tanımlanır
+(K-004 ile aynı kalıp). Varsayılan konum `%LOCALAPPDATA%\DefterIkielgeler`, Windows
+dışında XDG karşılığıdır; yol `DEFTERIKI_BELGE_ARSIVI` ortam değişkeniyle ezilebilir.
+Yol her zaman mutlaktır. Arşiv, ilk belge işlenmeden önce hazırdır.
+
+**Gerekçe:** K-001 arşivi "dosya sistemi + SHA-256" olarak seçmişti ama yeri tanımsızdı. Yol
+iki yerde tanımlanırsa veritabanı yolundaki üç sorun (göreli yol, iki kaynak, bulut senkronu)
+burada da doğar. Veritabanı ile arşiv aynı kök dizinde durur; yedek tek klasördür.
+
+**Reddedilen alternatif:** Belgeleri veritabanının içinde BLOB olarak saklamak. Tek dosya
+avantajı var ama veritabanını şişirir, belgeyi dışarıdan açmayı zorlaştırır ve SHA-256 ile
+dosya sisteminde doğrulama olanağını kaldırır.
+
+---
+
+## K-012 — Model yazım standardı: her kısıt adlandırılır
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** `CheckConstraint` her zaman `name=` ile yazılır; adsız kısıt yasaktır. Diğer kısıtlar
+(`pk`, `fk`, `uq`, `ix`) adlarını `model.py` içindeki adlandırma kuralından otomatik alır.
+Kural `tests/test_gocler.py` ile zorlanır: metadata'daki adsız kısıt testi kırar.
+
+**Gerekçe:** Adlandırma kuralı `ck_%(table_name)s_%(constraint_name)s` biçimindedir; ad
+verilmezse SQLAlchemy DDL üretirken hata verir. SQLite adsız kısıtı sonradan düşüremez;
+Alembic batch modu adı bilmek zorundadır.
+
+**Reddedilen alternatif:** `ck_%(column_0_name)s` gibi sütundan türeyen ad. Çok sütunlu ve
+sütunsuz (`length(x) > 0` gibi) kısıtlarda belirsiz kalır.
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**
@@ -242,11 +312,12 @@ Kovasız açık madde bırakılmaz.
 | # | Madde | Kova | Not |
 |---|-------|------|-----|
 | A-001 | pre-commit kancaları Cowork'ün kabuğundan çalışmıyor | şimdilik kabul | Kod commit'leri Windows tarafından alınır; bkz. `BULGULAR.md` B-003 |
-| A-002 | Claude Desktop'ın güvenilen klasör kaydı hâlâ eski OneDrive yolunu gösteriyor | yapılacak | Uygulamadan klasör yeniden bağlanacak: `C:\dev\DefterIki`. Kayıt `preferences.localAgentModeTrustedFolders` içinde |
+| A-002 | Claude Desktop'ın güvenilen klasör kaydı hâlâ eski OneDrive yolunu gösteriyor | kapandı | Çalışma dizini `C:\dev\DefterIki`; Claude Code oturumları buradan açılıyor (8 Eylül 2026) |
 | A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | kapandı | K-008 ile karara bağlandı, `tests/test_katmanlar.py` koruyor |
 | A-004 | İki konuya birden değen kural nereye yazılır | yapılacak | Şimdi kararlaştırılmıyor: ilk gerçek örnek çıktığında, somut vaka elde varken verilecek |
 | A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | kapandı | K-006 ile karara bağlandı |
 | A-006 | Aynı hareket iki belgede görünürse (hesap ekstresindeki kart ödemesi + kart ekstresindeki aynı ödeme) ne olur | yapılacak | Abdüllatif kararı erteledi. Masadaki öneri: her belge kendi kaydını yazar, ikisini bağlayan ayrı bir eşleştirme katmanı olur (öneri → onay → bozulabilir). Aynı mekanizma bir belgenin eksiğini (saat) başka belgeden tamamlamak için de gerekir (K-007). Hesap ekstresi tek başına bu kararı gerektirmiyor; kart gelmeden önce verilecek |
+| A-007 | Ürün modelleri Alembic metadata'sına nasıl kaydolur | yapılacak | İlk ürün modeliyle birlikte çözülür: `alembic/env.py` ve `tests/conftest.py` model modüllerini açıkça içe alır; ayrı bir kayıt mekanizması kurulmaz |
 
 ---
 
@@ -286,3 +357,7 @@ etmek. Kendi çekincesi: bu bir geri alma döngüsü yaratabilir.
 **Sonuç (8 Eylül 2026, ikinci oturum).** İki ilke K-008 oldu; başlangıç konusu K-009 ile
 hesap ekstresi seçildi. Belge–kayıt yönü K-006, veri sözleşmesi K-007. Açıkta kalan tek
 soru A-006 (aynı hareketin iki belgede görünmesi).
+
+**Üçüncü oturum (8 Eylül 2026).** İnceleme sonrası altı karar: belgeyi AI okur (K-010),
+arşiv yolu ayarlarda (K-011), kısıtlar adlı (K-012), tamsayı PK kalır (K-007 ek), metadata
+kaydı ilk modelle çözülür (A-007), A-002 kapandı.
