@@ -65,3 +65,7 @@ getirir ve bugünkü sorunu çözmez.
 **Kural:** Python kodu içeren commit'ler Windows tarafından (Claude Code veya terminal)
 alınır — kalite kapısı orada çalışır. Cowork yalnızca belge/metin dosyalarını `--no-verify`
 ile commit'ler; kod commit'lemez.
+
+**Doğrulandı (8 Eylül 2026):** Kanca Claude Code'un Windows kabuğundan sorunsuz çalışıyor —
+`ruff check`, `ruff format` ve `pyright` commit sırasında koşup geçti. Sorun gerçekten
+Cowork'ün Linux kabuğuna özeldir; kuralın "Windows tarafı" kısmı işliyor.
