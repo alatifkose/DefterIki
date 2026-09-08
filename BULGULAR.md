@@ -87,3 +87,43 @@ aktarımında test ya yanlış yerden kırılır ya da gerçek bir ihlali kaçı
 
 **Çözüm:** `_ic_importlar` artık modülün paket olup olmadığını (`paket_mi`) biliyor; çözüm
 Python kuralıyla birebir. Dört durumu (modül/paket × bir/çok seviye) sınayan test eklendi.
+
+---
+
+## B-005 — "create_engine yalnız veritabani.py'de" kuralı env.py ile çelişiyordu
+
+**Bulundu:** 8 Eylül 2026 (proje incelemesi) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** README ve `veritabani.py` docstring'i `create_engine`'in yalnız orada çağrıldığını
+yazıyordu; `alembic/env.py` ise kendi motorunu pragmasız kuruyordu. Kod haklıydı, belge
+eksikti: SQLite batch modu tabloyu düşürüp yeniden kurarken yabancı anahtar açık olursa
+bağlı satırlar silinebilir ya da göç kısıt hatasıyla durur.
+
+**Etkisi:** Kuralı okuyan biri env.py'yi `motor_kur`a "düzeltir", göçler yabancı anahtar
+açıkken koşmaya başlar; hata ilk gerçek tablo yeniden kurulumunda ve sessizce çıkar.
+
+**Çözüm:** İstisna K-004 ekine, README kuralına, env.py yorumuna ve `veritabani.py`
+docstring'ine yazıldı. İki test eklendi: `test_gocler` env.py'nin pragmasız ve `motor_kur`suz
+kaldığını, `test_veritabani` paket içinde `create_engine`'in yalnız `veritabani.py`de
+geçtiğini sınar.
+
+---
+
+## B-006 — Göç şablonu ruff'ın UP kurallarıyla çelişiyordu
+
+**Bulundu:** 8 Eylül 2026 (proje incelemesi) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** `alembic/script.py.mako` Alembic'in varsayılanıydı: `typing.Union`,
+`typing.Sequence`, isort'a aykırı import sırası. Üretilen ilk göç dosyasını pre-commit
+`--fix` ile commit anında yeniden yazacaktı; dosya diske düşen hâliyle depoya girmeyecekti.
+
+**Çözüm:** Şablon `collections.abc.Sequence` ve `X | Y` tiplerine çevrildi, import sırası
+düzeltildi. `alembic.ini` içine `post_write_hooks` eklendi: `alembic revision` dosyayı
+yazar yazmaz `ruff check --fix` ve `ruff format` koşar (`module` tipi, PATH'e bağımlı
+değil). Bir deneme revizyonu üretilip ruff, pyright ve gerçek `upgrade head` ile doğrulandı,
+sonra silindi.
+
+**Not:** Boş (elle yazılacak) bir revizyonda kullanılmayan `sa` ve `op` importlarını ruff
+kaldırır; elle göç yazan kişi gerekeni geri ekler. Otomatik üretilen göçte ikisi de
+kullanıldığı için kalır. `alembic/` klasörü pyright kapsamı dışındadır; üretilen dosya
+elle denetlendiğinde strict modda temizdi.
