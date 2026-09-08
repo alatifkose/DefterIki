@@ -119,8 +119,10 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
   zorlar; yeni paket açılınca oradaki `KATLAR` haritasına eklenir.
 - **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
   kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
-- **`create_engine` yalnız `cekirdek/temel/veritabani.py` içinde** çağrılır; SQLite
-  pragmaları oradan gelir.
+- **`create_engine` paket içinde yalnız `cekirdek/temel/veritabani.py`'de** çağrılır; SQLite
+  pragmaları oradan gelir. Tek bilinçli istisna `alembic/env.py`: göç sırasında yabancı
+  anahtar kapalı kalmalı, bu yüzden Alembic motorunu pragmasız kendisi kurar (K-004 ek).
+  İki kural da testle korunur.
 - **Her `CheckConstraint` adlıdır** (K-012): `name=` verilmeden yazılmaz; adsız kısıt
   SQLAlchemy'de tanım anında hata verir. Diğer kısıtlar adını `model.py` kuralından alır.
 - **Belge AI tarafından okunur, program doğrular** (K-010): okuma Pydantic ile doğrulanır,

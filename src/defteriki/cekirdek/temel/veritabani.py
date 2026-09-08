@@ -1,7 +1,10 @@
 """Veritabanı motorunun ve oturumun tek sahibi.
 
-Bağlantı ayarları (WAL, yabancı anahtar, meşgul bekleme) yalnız burada kurulur; başka
-bir yerde `create_engine` çağrılmaz. Yol `defteriki.ayarlar`dan gelir (K-004).
+Bağlantı ayarları (WAL, yabancı anahtar, meşgul bekleme) yalnız burada kurulur; paket
+içinde başka bir yerde `create_engine` çağrılmaz. Tek istisna `alembic/env.py`: göç
+sırasında yabancı anahtar **kapalı** kalmalıdır (batch modu tabloyu yeniden kurar), bu
+yüzden Alembic motorunu pragmasız, kendisi kurar (K-004 ek). Yol `defteriki.ayarlar`dan
+gelir (K-004).
 
 SQLite'ta `foreign_keys` **bağlantı başına** açılır ve varsayılanı kapalıdır; buradaki
 dinleyici her yeni bağlantıda açar. `busy_timeout` MCP süreci ile masaüstü uygulaması

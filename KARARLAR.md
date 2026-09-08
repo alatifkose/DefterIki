@@ -89,6 +89,14 @@ zaman mutlaktır ve adres POSIX ayracıyla yazılır.
   varsayılan zaten kodda olmak zorundadır; bu, seçilen çözümün daha zayıf hâlidir. Değişken
   ezme yolu olarak korundu.
 
+*Ek (8 Eylül 2026):* `env.py` motoru `veritabani.motor_kur` ile değil, doğrudan
+`create_engine` ile ve **pragmasız** kurar; bu, "create_engine yalnız `veritabani.py`
+içinde" kuralının tek bilinçli istisnasıdır. Sebep: `motor_kur` her bağlantıda
+`foreign_keys=ON` açar; SQLite batch modu tabloyu düşürüp yeniden kurarken yabancı anahtar
+açıksa bağlı satırlar `ON DELETE` kurallarıyla silinebilir ya da göç kısıt hatasıyla durur.
+Göç, SQLite varsayılanında (yabancı anahtar kapalı) koşar; WAL ve meşgul bekleme uygulama
+motoruyla gelir. İstisna `tests/test_gocler.py`, kural `tests/test_veritabani.py` ile korunur.
+
 **Nasıl korunuyor:** `tests/test_alembic_yolu.py` gerçek bir `alembic upgrade head` koşturur;
 göçün ortam değişkeninin gösterdiği dosyaya yazdığını, çalışma dizininden bağımsız olduğunu
 ve depo köküne hiçbir veritabanı dosyası düşmediğini doğrular. `alembic.ini` içindeki adresin

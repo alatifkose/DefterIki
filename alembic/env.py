@@ -18,6 +18,14 @@ target_metadata = Temel.metadata
 # Baglanti adresi alembic.ini'den DEGIL ayarlar modulunden gelir (K-004): veritabani
 # yolunun tek sahibi odur. ini'deki sqlalchemy.url bilerek bostur; buradan okunsaydi
 # yol iki yerde yazili olur ve gocler ile uygulama farkli dosyalara yazabilirdi.
+#
+# Motor BILEREK burada, `veritabani.motor_kur` kullanilmadan kurulur; bu "create_engine
+# yalniz veritabani.py'de" kuralinin tek istisnasidir (K-004 ek). Sebep: motor_kur her
+# baglantida `PRAGMA foreign_keys=ON` acar; SQLite'ta batch modu tabloyu dusurup yeniden
+# kurarken yabanci anahtar acik olursa bagli tablolardaki satirlar ON DELETE kurallariyla
+# silinebilir ya da gocun kendisi kisit hatasiyla durur. Goc sirasinda pragmalarin
+# varsayilanda (foreign_keys kapali) kalmasi gerekir; WAL ve busy_timeout uygulama motoru
+# acilinca gelir. tests/test_gocler.py bu istisnanin bilerek korundugunu sinar.
 
 
 def run_migrations_offline() -> None:

@@ -10,6 +10,8 @@ from sqlalchemy.exc import IntegrityError
 
 from defteriki.cekirdek.temel import veritabani
 
+KAYNAK = Path(__file__).resolve().parent.parent / "src" / "defteriki"
+
 
 def _pragma(motor: Engine, ad: str) -> object:
     with motor.connect() as b:
@@ -63,3 +65,16 @@ def test_oturum_sorunsuz_bitince_yazar(motor: Engine) -> None:
         s.execute(text("INSERT INTO t (id) VALUES (1)"))
     with motor.connect() as b:
         assert b.execute(text("SELECT COUNT(*) FROM t")).scalar() == 1
+
+
+def test_create_engine_paket_icinde_yalniz_veritabani_modulunde() -> None:
+    """Pragmalar tek yerden gelsin; ikinci bir motor sessizce yabanci anahtarsiz kalirdi.
+
+    `alembic/env.py` paket disindadir ve bilerek istisnadir (K-004 ek, test_gocler).
+    """
+    cagiranlar = sorted(
+        yol.relative_to(KAYNAK).as_posix()
+        for yol in KAYNAK.rglob("*.py")
+        if "create_engine" in yol.read_text(encoding="utf-8")
+    )
+    assert cagiranlar == ["cekirdek/temel/veritabani.py"]

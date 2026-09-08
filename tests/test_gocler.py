@@ -6,6 +6,7 @@ değişmiş ama göçü yazılmamıştır (ya da tersi). Kural: model değişikl
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,28 @@ def test_env_batch_modunda() -> None:
     metin = (DEPO_KOKU / "alembic" / "env.py").read_text(encoding="utf-8")
     assert metin.count("render_as_batch=True") == 2, "hem offline hem online modda acik olmali"
     assert "target_metadata = Temel.metadata" in metin
+
+
+def test_env_motoru_pragmasiz_kendisi_kurar() -> None:
+    """K-004 ek: goc sirasinda yabanci anahtar kapali kalmali.
+
+    env.py `motor_kur` kullanmaya "duzeltilirse" her baglantida foreign_keys acilir ve batch
+    modu tabloyu yeniden kurarken bagli satirlar silinebilir. Istisna bilerek korunur.
+    """
+    metin = (DEPO_KOKU / "alembic" / "env.py").read_text(encoding="utf-8")
+    agac = ast.parse(metin)
+    ice_alinanlar = {
+        f"{d.module}.{ad.name}" if isinstance(d, ast.ImportFrom) else ad.name
+        for d in ast.walk(agac)
+        if isinstance(d, ast.Import | ast.ImportFrom)
+        for ad in d.names
+    }
+    assert "sqlalchemy.create_engine" in ice_alinanlar
+    assert not any("veritabani" in ad for ad in ice_alinanlar), ice_alinanlar
+    dizgeler = [
+        d.value for d in ast.walk(agac) if isinstance(d, ast.Constant) and isinstance(d.value, str)
+    ]
+    assert not any("PRAGMA" in s for s in dizgeler), dizgeler
 
 
 def test_kisitlar_adlandirilmis() -> None:
