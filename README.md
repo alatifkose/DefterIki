@@ -8,11 +8,14 @@ tasarlanıyor; iş kuralları ikisinden de bağımsız bir çekirdekte toplanır
 
 ## Durum
 
-**İskelet aşaması, inşa öncesi kararlar verildi.** Altyapı kurulu ve kalite kapıları
-çalışıyor; alan modelleri henüz yazılmadı. 8 Eylül 2026'da inşadan önce verilmesi gereken
-kararlar alındı (K-006..K-009): belge tek doğruluk kaynağı, veri sözleşmesi (para/tarih/
-kimlik/yaşam durumu), katmanlı düzen ve başlangıç konusu olarak **hesap ekstresi**.
-Açıkta kalan tek karar A-006 (aynı hareketin iki belgede görünmesi).
+**İnşaya hazır iskelet.** 8 Eylül 2026'da inşadan önce verilmesi gereken kararlar
+alındı (K-006..K-009): belge tek doğruluk kaynağı, veri sözleşmesi (para/tarih/kimlik/
+yaşam durumu), katmanlı düzen ve başlangıç konusu olarak **hesap ekstresi**. Aynı gün
+teknik hazırlık tamamlandı: veritabanı motoru tek modülde (WAL, yabancı anahtar,
+meşgul bekleme), model tabanı ve kısıt adlandırma kuralı, Alembic batch modu, gerçek
+göçlerle açılan test fikstürü, "göç = model" testi ve katman kuralını zorlayan test.
+Alan modeli henüz yok; sıradaki iş hesap ekstresi (K-009). Açıkta kalan tek karar
+A-006 (aynı hareketin iki belgede görünmesi).
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -86,8 +89,12 @@ dosyaları birlikte veri bozulmasına yol açar.
 
 | Yol | İçerik |
 |---|---|
-| `src/defteriki/` | Uygulama paketi (`ayarlar.py`: yol ve ortam kararları) |
-| `tests/` | Testler |
+| `src/defteriki/ayarlar.py` | Yol ve ortam kararları; en alt kat |
+| `src/defteriki/cekirdek/temel/` | Veritabanı motoru (`veritabani.py`), model tabanı (`model.py`) |
+| `src/defteriki/cekirdek/urunler/` | Hesaplar, kartlar, krediler... (henüz yok; her ürün ayrı alt paket) |
+| `src/defteriki/cekirdek/yorum/` | Eşleştirme, giderler, işleme, raporlar (henüz yok) |
+| `src/defteriki/mcp/`, `arayuz/` | Cowork kapısı ve masaüstü (henüz yok) |
+| `tests/` | Testler; `conftest.py` geçici veritabanını gerçek göçlerle açar |
 | `alembic/` | Şema göçleri (`versions/` bugün boş) |
 | `KARARLAR.md` | Mimari karar defteri: karar, gerekçe, reddedilen alternatif |
 | `BULGULAR.md` | Çalışma sırasında çıkan sorunlar ve durumları |
@@ -101,3 +108,10 @@ dosyaları birlikte veri bozulmasına yol açar.
   pre-commit kancası çalışmıyor (bkz. `BULGULAR.md` B-003); oradan yalnız belge/metin
   dosyaları `--no-verify` ile commit'lenir.
 - Depoda ve çalışma kopyasında satır sonu **LF**, kodlama **UTF-8** (K-003).
+- **Bağımlılık tek yöne akar** (K-008): ayarlar → temel → urunler → yorum → mcp/arayuz.
+  Ürünler birbirini tanımaz, fonksiyon içinde `import` yok. `tests/test_katmanlar.py`
+  zorlar; yeni paket açılınca oradaki `KATLAR` haritasına eklenir.
+- **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
+  kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
+- **`create_engine` yalnız `cekirdek/temel/veritabani.py` içinde** çağrılır; SQLite
+  pragmaları oradan gelir.
