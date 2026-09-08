@@ -1,4 +1,4 @@
-"""Veritabanı yolunun tek kaynaktan gelmesini sınar (K-004)."""
+"""Veritabanı ve belge arşivi yollarının tek kaynaktan gelmesini sınar (K-004, K-011)."""
 
 from pathlib import Path
 
@@ -8,7 +8,12 @@ from defteriki import ayarlar
 
 
 def _ortami_temizle(monkeypatch: pytest.MonkeyPatch) -> None:
-    for degisken in (ayarlar.VERITABANI_DEGISKENI, "LOCALAPPDATA", "XDG_DATA_HOME"):
+    for degisken in (
+        ayarlar.VERITABANI_DEGISKENI,
+        ayarlar.BELGE_ARSIVI_DEGISKENI,
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+    ):
         monkeypatch.delenv(degisken, raising=False)
 
 
@@ -101,3 +106,69 @@ def test_bos_degisken_varsayilani_bozmaz(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
     assert ayarlar.veritabani_yolu().name == ayarlar.VERITABANI_DOSYA_ADI
+
+
+# --- Belge arşivi (K-011) ---
+
+
+def test_arsiv_degiskeni_yolu_ezer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _ortami_temizle(monkeypatch)
+    hedef = tmp_path / "baska" / "arsiv"
+    monkeypatch.setenv(ayarlar.BELGE_ARSIVI_DEGISKENI, str(hedef))
+
+    assert ayarlar.belge_arsivi_yolu() == hedef.resolve()
+
+
+def test_arsiv_varsayilani_veri_dizininin_altindadir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Veritabani ile arsiv ayni kokte durur; yedek tek klasordur."""
+    _ortami_temizle(monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    arsiv = ayarlar.belge_arsivi_yolu()
+
+    assert arsiv.parent == ayarlar.veritabani_yolu().parent
+    assert arsiv.name == ayarlar.BELGE_ARSIVI_DIZIN_ADI
+
+
+def test_arsiv_yolu_her_zaman_mutlaktir(monkeypatch: pytest.MonkeyPatch) -> None:
+    _ortami_temizle(monkeypatch)
+    monkeypatch.setenv(ayarlar.BELGE_ARSIVI_DEGISKENI, "goreli/arsiv")
+
+    assert ayarlar.belge_arsivi_yolu().is_absolute()
+
+
+def test_arsiv_bos_degisken_varsayilani_bozmaz(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _ortami_temizle(monkeypatch)
+    monkeypatch.setenv(ayarlar.BELGE_ARSIVI_DEGISKENI, "")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert ayarlar.belge_arsivi_yolu().name == ayarlar.BELGE_ARSIVI_DIZIN_ADI
+
+
+def test_arsiv_ve_veritabani_birbirinden_bagimsiz_ezilir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Yalniz veritabani ezilirse arsiv varsayilan yerinde kalir; iki yol birbirine bagli degil."""
+    _ortami_temizle(monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv(ayarlar.VERITABANI_DEGISKENI, str(tmp_path / "ayri" / "db.sqlite3"))
+
+    assert ayarlar.belge_arsivi_yolu() == (tmp_path / ayarlar.UYGULAMA_ADI / "belgeler").resolve()
+
+
+def test_belge_arsivini_hazirla_dizini_olusturur(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _ortami_temizle(monkeypatch)
+    hedef = tmp_path / "henuz" / "yok" / "arsiv"
+    monkeypatch.setenv(ayarlar.BELGE_ARSIVI_DEGISKENI, str(hedef))
+
+    dizin = ayarlar.belge_arsivini_hazirla()
+
+    assert dizin.is_dir()
+    assert dizin == hedef.resolve()
+    assert ayarlar.belge_arsivini_hazirla() == dizin

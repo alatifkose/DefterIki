@@ -1,9 +1,10 @@
 """Yol ve ortam kararlarının tek sahibi.
 
-Veritabanının nerede durduğunu **yalnız bu modül** bilir. Hem uygulama hem Alembic
-(`alembic/env.py`) yolu buradan alır; `alembic.ini` içindeki `sqlalchemy.url` bu yüzden
-bilerek boş bırakılmıştır (K-004). Yol iki yerde yazılı olursa er ya da geç ayrışır ve
-şema göçü bir dosyaya, uygulama başka dosyaya yazar — üstelik bu sessizce olur.
+Veritabanının ve belge arşivinin nerede durduğunu **yalnız bu modül** bilir (K-004,
+K-011). Hem uygulama hem Alembic (`alembic/env.py`) yolu buradan alır; `alembic.ini`
+içindeki `sqlalchemy.url` bu yüzden bilerek boş bırakılmıştır. Yol iki yerde yazılı olursa
+er ya da geç ayrışır ve şema göçü bir dosyaya, uygulama başka dosyaya yazar — üstelik bu
+sessizce olur.
 
 Fonksiyonlar önbelleklenmez: ortam değişkeni değişince sonuç da değişmelidir, testler
 buna dayanır.
@@ -17,8 +18,12 @@ from pathlib import Path
 UYGULAMA_ADI = "DefterIki"
 VERITABANI_DOSYA_ADI = "defteriki.sqlite3"
 
+BELGE_ARSIVI_DIZIN_ADI = "belgeler"
+
 #: Veritabanının tam dosya yolunu ezer. Testler ve ayrı bir kopyayla çalışmak içindir.
 VERITABANI_DEGISKENI = "DEFTERIKI_VERITABANI"
+#: Belge arşivi dizinini ezer (K-011).
+BELGE_ARSIVI_DEGISKENI = "DEFTERIKI_BELGE_ARSIVI"
 
 
 def veri_dizini() -> Path:
@@ -64,3 +69,23 @@ def veritabani_url() -> str:
     adres içinde kaçış karakteri sayıldığı için taşınabilir değildir.
     """
     return f"sqlite:///{veritabani_yolu().as_posix()}"
+
+
+def belge_arsivi_yolu() -> Path:
+    """Arşivlenen belgelerin dizini; mutlak yol (K-011).
+
+    Belge içeriği burada, SHA-256 ile adlandırılmış dosyalar olarak durur; veritabanı
+    yalnız kimliği ve üstverisini tutar. Varsayılan veri dizininin altındadır ki yedek tek
+    klasör olsun.
+    """
+    ozel = os.environ.get(BELGE_ARSIVI_DEGISKENI)
+    if ozel:
+        return Path(ozel).expanduser().resolve()
+    return (veri_dizini() / BELGE_ARSIVI_DIZIN_ADI).resolve()
+
+
+def belge_arsivini_hazirla() -> Path:
+    """Belge arşivi dizinini oluşturur ve döndürür; ilk belge işlenmeden önce çağrılır."""
+    dizin = belge_arsivi_yolu()
+    dizin.mkdir(parents=True, exist_ok=True)
+    return dizin
