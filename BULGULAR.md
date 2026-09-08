@@ -162,3 +162,20 @@ karışacaktı.
 **Çözüm:** `veri_dizini` autouse fikstürü her test için `tmp_path/veri` altında iki yolu
 birden ayarlar; `veritabani_yolu` ona dayanır. `tests/test_fiksturler.py` fikstür isteyen ve
 istemeyen testte iki yolun da geçici dizinde kaldığını sınar.
+
+---
+
+## B-009 — `busy_timeout` pragması `journal_mode`'dan sonra geliyordu
+
+**Bulundu:** 8 Eylül 2026 (ikinci inşa öncesi inceleme) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** `veritabani.PRAGMALAR` sırası `journal_mode=WAL`, `foreign_keys`, `busy_timeout`,
+`synchronous` idi. `journal_mode` dosyaya kilit ister; dosya o an başka bir süreçte kilitliyse
+bekleme süresi henüz tanımlı olmadığından ilk bağlantı beklemeden "database is locked" ile
+düşerdi.
+
+**Etkisi:** Bugün tek süreç olduğu için görünmüyordu. MCP süreci ile masaüstü uygulaması aynı
+dosyayı açtığında ilk bağlantı ara sıra ve açıklanamaz biçimde başarısız olurdu.
+
+**Çözüm:** `busy_timeout` ilk sıraya alındı; `tests/test_veritabani.py` sıranın korunduğunu
+sınar.

@@ -30,6 +30,12 @@ def test_mesgul_bekleme(motor: Engine) -> None:
     assert _pragma(motor, "busy_timeout") == veritabani.MESGUL_BEKLEME_MS
 
 
+def test_mesgul_bekleme_ilk_pragmadir() -> None:
+    """B-009: `journal_mode=WAL` kilit ister; bekleme suresi ondan once tanimli olmali."""
+    ilk, *_ = veritabani.PRAGMALAR
+    assert ilk.startswith("PRAGMA busy_timeout="), veritabani.PRAGMALAR
+
+
 def test_synchronous_normal(motor: Engine) -> None:
     """WAL ile NORMAL (1) guvenlidir; FULL (2) her commit'te disk senkronu bekler."""
     assert _pragma(motor, "synchronous") == 1

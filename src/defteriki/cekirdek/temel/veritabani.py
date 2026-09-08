@@ -26,10 +26,13 @@ from defteriki import ayarlar
 
 MESGUL_BEKLEME_MS = 5000
 
+# Sıra önemli: `busy_timeout` ilk gelir. `journal_mode=WAL` dosyaya kilit ister; dosya o an
+# başka bir süreçte (MCP + masaüstü) kilitliyse bekleme süresi henüz tanımlı olmadığından
+# ilk bağlantı "database is locked" ile düşerdi (B-009). Diğer pragmalar kilit istemez.
 PRAGMALAR: tuple[str, ...] = (
+    f"PRAGMA busy_timeout={MESGUL_BEKLEME_MS}",
     "PRAGMA journal_mode=WAL",
     "PRAGMA foreign_keys=ON",
-    f"PRAGMA busy_timeout={MESGUL_BEKLEME_MS}",
     "PRAGMA synchronous=NORMAL",
 )
 
