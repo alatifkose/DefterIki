@@ -69,3 +69,21 @@ ile commit'ler; kod commit'lemez.
 **Doğrulandı (8 Eylül 2026):** Kanca Claude Code'un Windows kabuğundan sorunsuz çalışıyor —
 `ruff check`, `ruff format` ve `pyright` commit sırasında koşup geçti. Sorun gerçekten
 Cowork'ün Linux kabuğuna özeldir; kuralın "Windows tarafı" kısmı işliyor.
+
+---
+
+## B-004 — Katman testi `__init__.py` içindeki göreli importu bir seviye kayık çözüyordu
+
+**Bulundu:** 8 Eylül 2026 (proje incelemesi) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** `tests/test_katmanlar.py` `from .x import y` biçimindeki importu modül adından
+`level` kadar parça atarak çözüyordu. Python ise göreli importu modülün *paketine* göre
+çözer; `__init__.py` için paket modülün kendisidir, dolayısıyla bir seviye daha az atılır.
+`temel/__init__.py` içindeki `from . import veritabani`, test tarafından
+`defteriki.cekirdek.veritabani` sanılıyordu.
+
+**Etkisi:** Bugün kodda göreli import olmadığı için görünmüyordu. İlk `__init__` yeniden dışa
+aktarımında test ya yanlış yerden kırılır ya da gerçek bir ihlali kaçırırdı.
+
+**Çözüm:** `_ic_importlar` artık modülün paket olup olmadığını (`paket_mi`) biliyor; çözüm
+Python kuralıyla birebir. Dört durumu (modül/paket × bir/çok seviye) sınayan test eklendi.

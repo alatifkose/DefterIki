@@ -66,8 +66,22 @@ def _birim(modul: str) -> str:
     return modul
 
 
-def _ic_importlar(agac: ast.Module, modul: str) -> list[tuple[int, str]]:
-    """(satır, hedef modül) çiftleri; yalnız `defteriki` içi hedefler."""
+def _goreli_taban(modul: str, seviye: int, paket_mi: bool) -> str:
+    """`from .x` / `from ..x` için başlangıç paketi.
+
+    Python göreli importu modülün *paketine* göre çözer. `a/b/c.py` için paket `a.b`;
+    `a/b/__init__.py` için paket `a.b`nin kendisidir. Bu yüzden `__init__` bir seviye
+    daha az yukarı çıkar.
+    """
+    atilacak = seviye - 1 if paket_mi else seviye
+    return modul.rsplit(".", atilacak)[0] if atilacak else modul
+
+
+def _ic_importlar(agac: ast.Module, modul: str, paket_mi: bool = False) -> list[tuple[int, str]]:
+    """(satır, hedef modül) çiftleri; yalnız `defteriki` içi hedefler.
+
+    `paket_mi`: modül bir `__init__.py` ise True; göreli import çözümü buna bağlıdır.
+    """
     sonuc: list[tuple[int, str]] = []
     for dugum in ast.walk(agac):
         if isinstance(dugum, ast.Import):
@@ -76,7 +90,7 @@ def _ic_importlar(agac: ast.Module, modul: str) -> list[tuple[int, str]]:
                     sonuc.append((dugum.lineno, ad.name))
         elif isinstance(dugum, ast.ImportFrom):
             if dugum.level:
-                taban = modul.rsplit(".", dugum.level)[0]
+                taban = _goreli_taban(modul, dugum.level, paket_mi)
                 hedef = f"{taban}.{dugum.module}" if dugum.module else taban
             else:
                 hedef = dugum.module or ""
@@ -112,7 +126,8 @@ def test_kapsayicilar_bos(modul: str) -> None:
     if yol is None:
         return
     agac = ast.parse(yol.read_text(encoding="utf-8"))
-    assert _ic_importlar(agac, modul) == [], f"{modul} kapsayıcıdır, import taşıyamaz"
+    importlar = _ic_importlar(agac, modul, paket_mi=yol.name == "__init__.py")
+    assert importlar == [], f"{modul} kapsayıcıdır, import taşıyamaz"
 
 
 @pytest.mark.parametrize(("modul", "yol"), MODULLER, ids=[m for m, _ in MODULLER])
@@ -123,7 +138,7 @@ def test_bagimlilik_tek_yone_akar(modul: str, yol: Path) -> None:
     kendi_kat = _kat(modul)
     assert kendi_kat is not None
     ihlaller: list[str] = []
-    for satir, hedef in _ic_importlar(agac, modul):
+    for satir, hedef in _ic_importlar(agac, modul, paket_mi=yol.name == "__init__.py"):
         hedef_kat = _kat(hedef)
         if hedef_kat is None:
             # "from defteriki import ayarlar" gibi: hedef bir ad olabilir, üst paketi dene.
@@ -156,3 +171,32 @@ def test_kural_ihlali_yakalanir() -> None:
 
     agac = ast.parse("def f():\n    import defteriki.ayarlar\n")
     assert _govde_ici_importlar(agac) == [2]
+
+
+def test_goreli_import_paket_ve_modulde_dogru_cozulur() -> None:
+    """`__init__.py` içindeki `from .` bir seviye daha az yukarı çıkar (Python kuralı)."""
+    # Modül: temel/veritabani.py içinde `from . import model` -> temel.model
+    agac = ast.parse("from . import model\n")
+    assert _ic_importlar(agac, "defteriki.cekirdek.temel.veritabani") == [
+        (1, "defteriki.cekirdek.temel.model")
+    ]
+
+    # Paket: temel/__init__.py içinde `from . import veritabani` -> temel.veritabani
+    agac = ast.parse("from . import veritabani\nfrom .model import Temel\n")
+    assert _ic_importlar(agac, "defteriki.cekirdek.temel", paket_mi=True) == [
+        (1, "defteriki.cekirdek.temel.veritabani"),
+        (2, "defteriki.cekirdek.temel.model.Temel"),
+    ]
+
+    # Paket, iki seviye: urunler/hesaplar/__init__.py içinde `from ..temel` ->
+    # cekirdek.urunler.temel. Python da böyle çözer; yol olmadığı için ImportError verirdi.
+    agac = ast.parse("from ..temel import veritabani\n")
+    assert _ic_importlar(agac, "defteriki.cekirdek.urunler.hesaplar", paket_mi=True) == [
+        (1, "defteriki.cekirdek.urunler.temel.veritabani")
+    ]
+
+    # Modül, üç seviye: urunler/hesaplar/servis.py içinde `from ...temel` -> cekirdek.temel
+    agac = ast.parse("from ...temel import veritabani\n")
+    assert _ic_importlar(agac, "defteriki.cekirdek.urunler.hesaplar.servis") == [
+        (1, "defteriki.cekirdek.temel.veritabani")
+    ]
