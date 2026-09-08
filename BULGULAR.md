@@ -144,3 +144,21 @@ Aynı sebeple `grep DefterIkielgeler` eşleşmiyordu; bayt ancak `grep -c $'\x08
 **Çözüm:** İki dosyada bayt `\b` ile değiştirildi; `git grep -c` ile depoda başka 0x08
 kalmadığı doğrulandı. Kural: dosya içeriği yazan betikler heredoc'a değil ayrı bir `.py`
 dosyasına yazılır ve ters bölü içeren dizgeler ham (`r"..."`) tutulur.
+
+---
+
+## B-008 — Test fikstürü belge arşivini geçici dizine yönlendirmiyordu
+
+**Bulundu:** 8 Eylül 2026 (ikinci inşa öncesi inceleme) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** `tests/conftest.py` yalnız `DEFTERIKI_VERITABANI` değişkenini geçici dosyaya
+çeviriyordu; `DEFTERIKI_BELGE_ARSIVI` (K-011) dokunulmadan kalıyordu. Fikstür istemeyen bir
+test ise her iki yolu da gerçek konumunda görüyordu.
+
+**Etkisi:** Bugün belge kodu olmadığı için görünmüyordu. İlk belge kaydeden test gerçek
+`%LOCALAPPDATA%\DefterIki\belgeler` klasörüne yazacak, test verisi kullanıcı verisine
+karışacaktı.
+
+**Çözüm:** `veri_dizini` autouse fikstürü her test için `tmp_path/veri` altında iki yolu
+birden ayarlar; `veritabani_yolu` ona dayanır. `tests/test_fiksturler.py` fikstür isteyen ve
+istemeyen testte iki yolun da geçici dizinde kaldığını sınar.
