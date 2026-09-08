@@ -142,3 +142,45 @@ Kovasız açık madde bırakılmaz.
 | # | Madde | Kova | Not |
 |---|-------|------|-----|
 | A-001 | pre-commit kancaları Cowork'ün kabuğundan çalışmıyor | şimdilik kabul | Kod commit'leri Windows tarafından alınır; bkz. `BULGULAR.md` B-003 |
+| A-002 | Claude Desktop'ın güvenilen klasör kaydı hâlâ eski OneDrive yolunu gösteriyor | yapılacak | Uygulamadan klasör yeniden bağlanacak: `C:\dev\DefterIki`. Kayıt `preferences.localAgentModeTrustedFolders` içinde |
+| A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | yapılacak | K-002 yazılı ama `src/defteriki/` altında yapı yok. Kararlaştırılan iki ilke aşağıda |
+| A-004 | İki konuya birden değen kural nereye yazılır | yapılacak | Şimdi kararlaştırılmıyor: ilk gerçek örnek çıktığında, somut vaka elde varken verilecek |
+| A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | yapılacak | Kuralı yanlış çıkanı geri almanın ucuz olması buna bağlı; elle veri düzeltme yerine belgeyi yeniden işleme |
+
+---
+
+## Tartışma notu — sınır ve kuralların keşfi (8 Eylül 2026)
+
+Karar değil, **karara giden konuşmanın özeti**. Bir sonraki oturum buradan devam eder.
+
+**Çıkış noktası.** Abdüllatif'in tespiti: iş kurallarının hepsi bugün bilinmiyor; bugün
+kural diye bağlanan şey yarın ayağa dolanıyor. Bu yüzden kurallar baştan kararlaştırılamaz.
+
+**Ayrım.** İki farklı şey birbirine karışıyordu:
+- *İş kuralları* ("kart limiti aşılamaz", "ödeme tutarı hareketi aşamaz"): bilinmiyor,
+  kullandıkça çıkacak, taahhüt edilmiyor.
+- *Yerleşim kuralı* ("kod nerede durur, ne neyi tanır"): finansla ilgisi yok, iş kuralları
+  bilinmeden de karara bağlanabilir.
+
+**Üzerinde durulan iki ilke** (henüz K numarası verilmedi, A-003'te):
+1. Bir iş kuralı kodda tek yerde durur; ekran da MCP de oraya sorar.
+2. Konular (kartlar, hesaplar, giderler) birbirinin içine uzanmaz.
+
+Gerekçe kuralları dondurmak değil, **fikir değiştirmeyi ucuzlatmak**: yanlış çıkan parça
+tek başına atılabilsin.
+
+**Çalışma yöntemi (Abdüllatif'in tercihi).** Projeyi çok büyütmeden, gerçek belgelerle
+çalıştırarak kuralları kullanımda keşfetmek; gerekirse geri alıp öğrenilen kuralla devam
+etmek. Kendi çekincesi: bu bir geri alma döngüsü yaratabilir.
+
+**Döngüye karşı üç dayanak:**
+- Kodu geri almak ucuz (git); pahalı olan yanlış kuralla yazılmış **veriyi** geri almak.
+  Panzehiri A-005: kayıt kaynağına geri izlenebilirse geri alma "belgeleri yeniden işle"ye
+  iner, elle veri ameliyatına değil.
+- Geri almanın **birimi** küçük olmalı; parçalar ayrı değilse yanlış çıkanı tek başına
+  atamazsın ve yanlış kuralla yaşamaya başlarsın.
+- Sinyal: aynı şey üçüncü kez geri alınıyorsa sorun kodda değildir; cevaplanmamış bir soru
+  vardır, orada durulur.
+
+**Kalan soru.** Hangi konudan başlanacağı (tek bir ürün: yalnız kredi kartı ya da yalnız
+hesap hareketi) seçilmedi.
