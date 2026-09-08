@@ -32,8 +32,11 @@ oldukça büyür.
 Üçüncü inceleme (aynı gün) kodu temiz buldu, üç küçük belge/test tutarsızlığı düzeltti ve
 A-010'u kapattı: AI okuması veritabanında JSON metin sütununda saklanır (K-013), kayıtlar
 okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur; reddedilen okuma da
-REDDEDILDI durumuyla saklanır, kayıt türetilmez (K-013 ek). Sıradaki adım: anonim hesap
-ekstresi örneği ve okuma modeli.
+REDDEDILDI durumuyla saklanır, kayıt türetilmez (K-013 ek).
+Aynı gün paket iskeleti kuruldu: `kurumlar`, `urunler`, `belgeler`, `kayitlar`, `akislar`.
+Dosyalar **boş**; içlerinde yalnız konu özeti var, tablo ve kod yok. Alan modelinin
+kendisi henüz yazılmadı. Bu iskelet K-008'in üç katlı planının (`cekirdek/urunler`,
+`cekirdek/yorum`) yerini alıyor; K-008 metni bu yüzden güncellenmeyi bekliyor.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -115,8 +118,11 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
 |---|---|
 | `src/defteriki/ayarlar.py` | Yol ve ortam kararları (veritabanı, belge arşivi); en alt kat |
 | `src/defteriki/cekirdek/temel/` | Veritabanı motoru (`veritabani.py`), model tabanı (`model.py`) |
-| `src/defteriki/cekirdek/urunler/` | Hesaplar, kartlar, krediler... (henüz yok; her ürün ayrı alt paket) |
-| `src/defteriki/cekirdek/yorum/` | Eşleştirme, giderler, işleme, raporlar (henüz yok) |
+| `src/defteriki/kurumlar/` | Bankalar ve benzeri kurumlar (`model.py`, `servis.py`) |
+| `src/defteriki/urunler/` | Bir kuruma ait hesap, kart, kredi, KMH (`model.py`, `servis.py`) |
+| `src/defteriki/belgeler/` | Arşiv, belge kimliği ve okumalar (`model.py`, `okumalar.py`, `servis.py`) |
+| `src/defteriki/kayitlar/` | Belgelerden türeyen finansal kayıtlar (`model.py`, `servis.py`) |
+| `src/defteriki/akislar/` | Birden çok paketi sırayla kullanan uçtan uca işler (`belge_isle.py`) |
 | `src/defteriki/mcp/`, `arayuz/` | Cowork kapısı ve masaüstü (henüz yok) |
 | `tests/` | Testler; `conftest.py` her teste geçici veri dizini verir (veritabanı + arşiv) ve şemayı gerçek göçlerle kurar |
 | `alembic/` | Şema göçleri (`versions/` bugün boş) |
@@ -132,9 +138,12 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
   pre-commit kancası çalışmıyor (bkz. `BULGULAR.md` B-003); oradan yalnız belge/metin
   dosyaları `--no-verify` ile commit'lenir.
 - Depoda ve çalışma kopyasında satır sonu **LF**, kodlama **UTF-8** (K-003).
-- **Bağımlılık tek yöne akar** (K-008): ayarlar → temel → urunler → yorum → mcp/arayuz.
-  Ürünler birbirini tanımaz, fonksiyon içinde `import` yok. `tests/test_katmanlar.py`
-  zorlar; yeni paket açılınca oradaki `KATLAR` haritasına eklenir.
+- **Bağımlılık tek yöne akar** (K-008): ayarlar → temel → kurumlar → urunler → belgeler →
+  kayitlar → akislar → mcp/arayuz. Ürün kurumu tanır, belge ürünü, kayıt belgeyi; akış
+  hepsini tanır, aşağısı yukarısını tanımaz. Fonksiyon içinde `import` yok.
+  `tests/test_katmanlar.py` zorlar; yeni paket açılınca oradaki `KATLAR` haritasına
+  eklenir. K-008'in metni hâlâ eski üç katlı planı anlatıyor; sıra ondan değil buradan
+  okunur, karar güncellenene kadar.
 - **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
   kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
 - **`create_engine` paket içinde yalnız `cekirdek/temel/veritabani.py`'de** çağrılır; SQLite
