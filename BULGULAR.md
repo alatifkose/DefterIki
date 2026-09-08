@@ -127,3 +127,20 @@ sonra silindi.
 kaldırır; elle göç yazan kişi gerekeni geri ekler. Otomatik üretilen göçte ikisi de
 kullanıldığı için kalır. `alembic/` klasörü pyright kapsamı dışındadır; üretilen dosya
 elle denetlendiğinde strict modda temizdi.
+
+---
+
+## B-007 — Belgelere `\b` yerine gerçek backspace baytı sızmıştı
+
+**Bulundu:** 8 Eylül 2026 (inşa öncesi inceleme) · **Durum:** ÇÖZÜLDÜ (8 Eylül 2026)
+
+**Sorun:** README ve K-011'de arşiv yolu `DefterIkielgeler` görünüyordu. Dosyada iki
+karakterlik `\b` değil, tek bir 0x08 (backspace) baytı vardı: metin bir kabuk heredoc'u
+içinden Python'a geçerken `\\b` önce `\b`ye, sonra kaçış çözümüyle backspace'e dönmüştü.
+Aynı sebeple `grep DefterIkielgeler` eşleşmiyordu; bayt ancak `grep -c $'\x08'` ile görüldü.
+
+**Etkisi:** Belge yanlış yolu gösteriyor, arama ile bulunamıyordu.
+
+**Çözüm:** İki dosyada bayt `\b` ile değiştirildi; `git grep -c` ile depoda başka 0x08
+kalmadığı doğrulandı. Kural: dosya içeriği yazan betikler heredoc'a değil ayrı bir `.py`
+dosyasına yazılır ve ters bölü içeren dizgeler ham (`r"..."`) tutulur.

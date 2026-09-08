@@ -12,13 +12,18 @@ tasarlanıyor; iş kuralları ikisinden de bağımsız bir çekirdekte toplanır
 alındı (K-006..K-009): belge tek doğruluk kaynağı, veri sözleşmesi (para/tarih/kimlik/
 yaşam durumu), katmanlı düzen ve başlangıç konusu olarak **hesap ekstresi**. Aynı gün
 teknik hazırlık tamamlandı: veritabanı motoru tek modülde (WAL, yabancı anahtar,
-meşgul bekleme), model tabanı ve kısıt adlandırma kuralı, Alembic batch modu, gerçek
-göçlerle açılan test fikstürü, "göç = model" testi ve katman kuralını zorlayan test.
+meşgul bekleme, `synchronous=NORMAL`), model tabanı ve kısıt adlandırma kuralı, Alembic
+batch modu, gerçek göçlerle açılan test fikstürü, "göç = model" testi ve katman kuralını
+zorlayan test.
 Aynı gün inceleme sonrası üç karar daha alındı: belgeyi AI okur, determinizm doğrulama ve
 kayıt katmanında aranır (K-010); belge arşivi yolu da ayarların tek sahipliğinde (K-011,
 kodda ve testte); her `CheckConstraint` adlıdır (K-012, testle zorlanır). Alan modeli henüz
-yok; sıradaki iş hesap ekstresi (K-009). Açık kararlar: A-006 (aynı hareketin iki belgede
-görünmesi) ve A-007 (ürün modellerinin metadata kaydı, ilk modelle birlikte çözülür).
+yok; sıradaki iş hesap ekstresi (K-009). İnşa öncesi inceleme (aynı gün) kodu temiz buldu;
+`uq`/`fk` kısıt adları ilk göçten önce tüm sütunlardan türeyecek biçimde sabitlendi. Açık
+kararlar: A-004 (iki konuya değen kural nereye yazılır, ilk örnekte), A-006 (aynı hareketin
+iki belgede görünmesi) ve A-007 (ürün modellerinin metadata kaydı, ilk modelle birlikte
+çözülür). A-008 (satır bazında sahiplik) bilinçli ertelendi: ilk sürümde dosyanın sahibi
+kullanıcıdır.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -80,7 +85,7 @@ uv run alembic upgrade head
 | Ne | Nerede |
 |---|---|
 | Canlı veritabanı | `%LOCALAPPDATA%\DefterIki\defteriki.sqlite3` |
-| Belge arşivi | `%LOCALAPPDATA%\DefterIkielgeler\` |
+| Belge arşivi | `%LOCALAPPDATA%\DefterIki\belgeler\` |
 
 Veritabanı yolu `DEFTERIKI_VERITABANI`, arşiv dizini `DEFTERIKI_BELGE_ARSIVI` ortam
 değişkeniyle ayrı ayrı değiştirilebilir; testler bunu kullanır. Windows dışında (CI, Linux
@@ -120,11 +125,14 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
 - **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
   kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
 - **`create_engine` paket içinde yalnız `cekirdek/temel/veritabani.py`'de** çağrılır; SQLite
-  pragmaları oradan gelir. Tek bilinçli istisna `alembic/env.py`: göç sırasında yabancı
-  anahtar kapalı kalmalı, bu yüzden Alembic motorunu pragmasız kendisi kurar (K-004 ek).
-  İki kural da testle korunur.
+  pragmaları oradan gelir (WAL, `foreign_keys=ON`, `busy_timeout`, `synchronous=NORMAL`:
+  WAL ile birlikte güvenli, her commit'te disk senkronu beklemez). Tek bilinçli istisna
+  `alembic/env.py`: göç sırasında yabancı anahtar kapalı kalmalı, bu yüzden Alembic
+  motorunu pragmasız kendisi kurar (K-004 ek). İki kural da testle korunur.
 - **Her `CheckConstraint` adlıdır** (K-012): `name=` verilmeden yazılmaz; adsız kısıt
-  SQLAlchemy'de tanım anında hata verir. Diğer kısıtlar adını `model.py` kuralından alır.
+  SQLAlchemy'de tanım anında hata verir. Diğer kısıtlar adını `model.py` kuralından alır;
+  `uq` ve `fk` adları kısıttaki **tüm** sütunlardan türer (`column_0_N_name`), ilk sütunu
+  paylaşan iki kısıt çakışmaz.
 - **Belge AI tarafından okunur, program doğrular** (K-010): okuma Pydantic ile doğrulanır,
   belgeyle birlikte saklanır; kayıtlar saklı okumadan türer. Yeniden işleme AI'ya yeniden
   sormak değildir.

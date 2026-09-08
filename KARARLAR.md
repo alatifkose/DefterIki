@@ -33,8 +33,11 @@ arasında katı bir sınır bulunur; iş kuralları yalnızca çekirdekte tanım
 aynı kapıdan geçer.
 
 **Gerekçe:** Uygulamayı bugün Cowork (MCP, stdio) işletecek; ürünleşince Claude API
-girecek. Kurallar tek yerde durursa yeni arayüz eklemek çekirdeği değiştirmez. Tek
-kullanıcılı masaüstü kullanım için ağ katmanı bugün hiçbir sorunu çözmüyor.
+girecek. Kurallar tek yerde durursa yeni arayüz eklemek çekirdeği değiştirmez. Ürün çok
+kullanıcılı hedeflense de (bireyler ve şirketler) uygulama bugün tek süreç, tek SQLite
+dosyasıyla ve tek kullanıcı tarafından işletiliyor; ağ katmanı bu aşamada hiçbir sorunu
+çözmüyor. *(Gerekçe 8 Eylül 2026'da düzeltildi: önceki metin "tek kullanıcılı masaüstü"
+varsayımı taşıyordu; karar değişmedi.)*
 
 **Reddedilen alternatif:** Ayrı backend süreci + HTTP API. Bugün ihtiyaç yok; süreç yönetimi,
 kimlik doğrulama ve dağıtım maliyeti getiriyor. Çekirdek/arayüz sınırı korunduğu sürece
@@ -281,7 +284,7 @@ ayrı kural ister; ilk belge türünde bile en çok zaman alan iş olurdu. Kapı
 **Tarih:** 8 Eylül 2026
 
 **Karar:** Arşivlenen belgelerin dizini yalnız `src/defteriki/ayarlar.py` içinde tanımlanır
-(K-004 ile aynı kalıp). Varsayılan konum `%LOCALAPPDATA%\DefterIkielgeler`, Windows
+(K-004 ile aynı kalıp). Varsayılan konum `%LOCALAPPDATA%\DefterIki\belgeler`, Windows
 dışında XDG karşılığıdır; yol `DEFTERIKI_BELGE_ARSIVI` ortam değişkeniyle ezilebilir.
 Yol her zaman mutlaktır. Arşiv, ilk belge işlenmeden önce hazırdır.
 
@@ -329,6 +332,7 @@ Kovasız açık madde bırakılmaz.
 | A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | kapandı | K-006 ile karara bağlandı |
 | A-006 | Aynı hareket iki belgede görünürse (hesap ekstresindeki kart ödemesi + kart ekstresindeki aynı ödeme) ne olur | yapılacak | Abdüllatif kararı erteledi. Masadaki öneri: her belge kendi kaydını yazar, ikisini bağlayan ayrı bir eşleştirme katmanı olur (öneri → onay → bozulabilir). Aynı mekanizma bir belgenin eksiğini (saat) başka belgeden tamamlamak için de gerekir (K-007). Hesap ekstresi tek başına bu kararı gerektirmiyor; kart gelmeden önce verilecek |
 | A-007 | Ürün modelleri Alembic metadata'sına nasıl kaydolur | yapılacak | İlk ürün modeliyle birlikte çözülür: `alembic/env.py` ve `tests/conftest.py` model modüllerini açıkça içe alır; ayrı bir kayıt mekanizması kurulmaz |
+| A-008 | Kayıtların sahibi (kullanıcı/şirket) satır bazında tutulacak mı | şimdilik kabul | 8 Eylül 2026 kararı: **ilk sürümde dosyanın sahibi kullanıcıdır; satır bazında sahiplik yoktur.** Uygulama tek kullanıcı + tek SQLite dosyasıyla çalışıyor; ürün hedefi çok kullanıcılı olsa da bu bugün `user_id` sütunu gerektirmiyor. Ürünleştirme aşamasında yeniden değerlendirilir. Bilinçli erteleme; unutulmuş değil |
 
 ---
 
@@ -372,3 +376,9 @@ soru A-006 (aynı hareketin iki belgede görünmesi).
 **Üçüncü oturum (8 Eylül 2026).** İnceleme sonrası altı karar: belgeyi AI okur (K-010),
 arşiv yolu ayarlarda (K-011), kısıtlar adlı (K-012), tamsayı PK kalır (K-007 ek), metadata
 kaydı ilk modelle çözülür (A-007), A-002 kapandı.
+
+**Dördüncü oturum (8 Eylül 2026, inşa öncesi inceleme).** Kod ve araçlar temiz çıktı
+(61 test, ruff, pyright, pre-commit). İlk göçten önce `uq`/`fk` kısıt adları tüm sütunlardan
+türetilecek biçimde düzeltildi (`column_0_N_name`; yalnız ilk sütunla iki kısıt aynı adı
+alabiliyordu). Sahiplik sorusu A-008 olarak açıldı ve bilinçli ertelendi. K-002 gerekçesi
+ve K-011'deki yol yazımı (dosyaya sızmış backspace baytı) düzeltildi.
