@@ -14,7 +14,10 @@ from pathlib import Path
 from defteriki import ayarlar
 
 DEPO_KOKU = Path(__file__).resolve().parent.parent
-VERITABANI_DESENLERI = ("*.db", "*.sqlite3", "*.db-wal", "*.db-shm")
+# .gitignore ile ayni kume: dosya adi, WAL ve SHM eslikcileri.
+VERITABANI_DESENLERI = tuple(
+    f"*.{uzanti}{ek}" for uzanti in ("db", "sqlite", "sqlite3") for ek in ("", "-wal", "-shm")
+)
 
 
 def _koktenki_veritabani_dosyalari() -> set[Path]:

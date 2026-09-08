@@ -125,8 +125,9 @@ sonra silindi.
 
 **Not:** Boş (elle yazılacak) bir revizyonda kullanılmayan `sa` ve `op` importlarını ruff
 kaldırır; elle göç yazan kişi gerekeni geri ekler. Otomatik üretilen göçte ikisi de
-kullanıldığı için kalır. `alembic/` klasörü pyright kapsamı dışındadır; üretilen dosya
-elle denetlendiğinde strict modda temizdi.
+kullanıldığı için kalır. `alembic/` klasörü pyright kapsamındadır (strict); üretilen göç
+dosyası da bu denetimden geçer. *(Not 8 Eylül 2026'da düzeltildi: önceki metin klasörü
+kapsam dışı gösteriyordu, kapsama alındıktan sonra güncellenmemişti.)*
 
 ---
 

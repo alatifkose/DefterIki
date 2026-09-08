@@ -61,6 +61,12 @@ görünmez, gözden geçirme imkânsızlaşır.
 saklanmadığı için başka bir makinede veya yeni kurulumda sorun geri geliyor. `.gitattributes`
 depoyla birlikte taşınır.
 
+*Not (8 Eylül 2026):* Bu makinede Git for Windows'un sistem yapılandırması
+(`C:\Program Files\Git\etc\gitconfig`) `core.autocrlf=true` taşıyor. `.gitattributes`
+içindeki `eol=lf` bu ayarı ezer; çalışma kopyası LF kalır (doğrulandı). Ayar bilerek
+bırakıldı: sistem geneli ve bu depoya özgü değil; kaldırmak yönetici hakkı ister ve başka
+depoları etkiler. Karar için gereken tek şey `.gitattributes`tır.
+
 ---
 
 ## K-004 — Veritabanı yolunun tek sahibi `ayarlar` modülüdür
