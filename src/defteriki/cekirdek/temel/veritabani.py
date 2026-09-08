@@ -1,0 +1,70 @@
+"""Veritabanı motorunun ve oturumun tek sahibi.
+
+Bağlantı ayarları (WAL, yabancı anahtar, meşgul bekleme) yalnız burada kurulur; başka
+bir yerde `create_engine` çağrılmaz. Yol `defteriki.ayarlar`dan gelir (K-004).
+
+SQLite'ta `foreign_keys` **bağlantı başına** açılır ve varsayılanı kapalıdır; buradaki
+dinleyici her yeni bağlantıda açar. `busy_timeout` MCP süreci ile masaüstü uygulaması
+aynı dosyayı aynı anda kullandığında "database is locked" hatasını önler.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Generator
+from contextlib import contextmanager
+from typing import Any
+
+from sqlalchemy import Engine, create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
+
+from defteriki import ayarlar
+
+MESGUL_BEKLEME_MS = 5000
+
+PRAGMALAR: tuple[str, ...] = (
+    "PRAGMA journal_mode=WAL",
+    "PRAGMA foreign_keys=ON",
+    f"PRAGMA busy_timeout={MESGUL_BEKLEME_MS}",
+    "PRAGMA synchronous=NORMAL",
+)
+
+
+def _pragmalari_uygula(baglanti: Any, _kayit: Any) -> None:
+    imlec = baglanti.cursor()
+    try:
+        for pragma in PRAGMALAR:
+            imlec.execute(pragma)
+    finally:
+        imlec.close()
+
+
+def motor_kur(url: str | None = None) -> Engine:
+    """Canlı veritabanı için motor. `url` verilmezse `ayarlar` yolunu kullanır.
+
+    Dizin yoksa açılır; SQLite eksik dizini kendisi oluşturmaz.
+    """
+    if url is None:
+        ayarlar.veri_dizinini_hazirla()
+        url = ayarlar.veritabani_url()
+    motor = create_engine(url)
+    event.listen(motor, "connect", _pragmalari_uygula)
+    return motor
+
+
+def oturum_ureticisi(motor: Engine) -> sessionmaker[Session]:
+    return sessionmaker(motor, expire_on_commit=False)
+
+
+@contextmanager
+def oturum(motor: Engine) -> Generator[Session]:
+    """Tek iş birimi: blok sorunsuz biterse commit, hata çıkarsa rollback.
+
+    İç içe kullanılmaz; bir servis çağrısı bir oturumdur.
+    """
+    with oturum_ureticisi(motor)() as s:
+        try:
+            yield s
+            s.commit()
+        except BaseException:
+            s.rollback()
+            raise

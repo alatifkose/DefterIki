@@ -3,6 +3,8 @@
 
 # Ikili dosyalar
 *.db binary
+*.sqlite3 binary
+*.xlsx binary
 *.png binary
 *.jpg binary
 *.pdf binary

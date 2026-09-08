@@ -1,9 +1,10 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import MetaData, create_engine, pool
+from sqlalchemy import create_engine, pool
 
 from defteriki import ayarlar
+from defteriki.cekirdek.temel.model import Temel
 
 # Alembic Config nesnesi: alembic.ini icindeki degerlere erisim saglar.
 config = context.config
@@ -11,8 +12,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Henuz model yok; autogenerate icin metadata ilerideki adimda baglanacak.
-target_metadata: MetaData | None = None
+# Tek metadata: tum modeller Temel'den turer (model.py). Autogenerate bunu hedef alir.
+target_metadata = Temel.metadata
 
 # Baglanti adresi alembic.ini'den DEGIL ayarlar modulunden gelir (K-004): veritabani
 # yolunun tek sahibi odur. ini'deki sqlalchemy.url bilerek bostur; buradan okunsaydi
@@ -26,6 +27,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
+        compare_type=True,
     )
 
     with context.begin_transaction():
@@ -38,7 +41,14 @@ def run_migrations_online() -> None:
     connectable = create_engine(ayarlar.veritabani_url(), poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        # render_as_batch: SQLite sutun/kisit degistiremez; batch modu tabloyu kopyalayarak
+        # yapar. compare_type: sutun tipi degisiklikleri de autogenerate'e dussun.
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+            compare_type=True,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
