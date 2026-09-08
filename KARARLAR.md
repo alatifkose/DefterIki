@@ -349,6 +349,13 @@ tutulmak zorunda kalır (iki yerde durum), okuma dosyası ile kayıtlar farklı 
 ve yedek iki kaynağın aynı anını yansıtmayabilir. İnsanın bakacağı şey belgenin kendisidir,
 okuma değil.
 
+*Ek (8 Eylül 2026, A-011):* Doğrulamada **reddedilen okuma da saklanır**, yalnız okuma
+tablosuna özgü dördüncü yaşam durumuyla: **REDDEDILDI**. Reddedilen okumadan kayıt
+türetilmez; satır, "AI aynı belgeyi kaç kez ve nasıl yanlış okudu" sorusunun izidir.
+K-007'deki üç durum (AKTIF / IPTAL / YERINI_DEVRETTI) diğer tablolar için değişmez;
+REDDEDILDI yalnız okumaya aittir. Reddedilme sebebi (ör. açılış + hareketler ≠ kapanış)
+satırda tutulur ki iz tek başına okunabilsin.
+
 ---
 
 ## Açık maddeler
@@ -368,7 +375,7 @@ Kovasız açık madde bırakılmaz.
 | A-008 | Kayıtların sahibi (kullanıcı/şirket) satır bazında tutulacak mı | şimdilik kabul | 8 Eylül 2026 kararı: **ilk sürümde dosyanın sahibi kullanıcıdır; satır bazında sahiplik yoktur.** Uygulama tek kullanıcı + tek SQLite dosyasıyla çalışıyor; ürün hedefi çok kullanıcılı olsa da bu bugün `user_id` sütunu gerektirmiyor. Ürünleştirme aşamasında yeniden değerlendirilir. Bilinçli erteleme; unutulmuş değil |
 | A-009 | Dosyaya loglama (K-001'de vaat edildi) henüz kurulmadı | yapılacak | Hesap ekstresinin önünde engel değil; **ilk gerçek kullanımdan önce** kurulur. Log dosyasının yeri K-004 kalıbıyla `ayarlar` modülünün sahipliğinde, veri dizininin altında olur. `alembic/env.py` içindeki `disable_existing_loggers=False` bu loglamanın göçler sırasında susmaması içindir |
 | A-010 | AI okuması nerede saklanır: veritabanında JSON sütunu mu, arşivde belgenin yanında dosya mı | kapandı | K-013 ile karara bağlandı (8 Eylül 2026): veritabanında JSON metin sütunu. Eski not: K-010 "belgeyle birlikte saklanır" der ama yeri söylemez. **İlk belge modeliyle birlikte, ilk göçten önce** kararlaştırılır; sonradan taşımak göç ve arşiv dönüşümü ister. Ölçütler: yedek tek klasör (K-011), yeniden işleme saklı okumadan üretilir (K-010), okuma sürümlenir ve eskisi YERINI_DEVRETTI olur (K-007) |
-| A-011 | Doğrulamada reddedilen okuma (açılış + hareketler ≠ kapanış) saklanır mı | yapılacak | İlk okuma modeliyle birlikte karar verilir. Masadaki öneri: reddedilen okuma da saklanır, yalnız okuma tablosuna özgü dördüncü durumla (REDDEDILDI); böylece "AI aynı belgeyi üç kez yanlış okudu" görülebilir ve kayıt türetilmediği açıkça bellidir. K-007'deki üç durum diğer tablolar için değişmez |
+| A-011 | Doğrulamada reddedilen okuma (açılış + hareketler ≠ kapanış) saklanır mı | kapandı | K-013 ek ile karara bağlandı (8 Eylül 2026): saklanır, okuma tablosuna özgü REDDEDILDI durumuyla; kayıt türetilmez, sebep satırda tutulur |
 
 ---
 
@@ -431,6 +438,6 @@ temel kata girer; "önce bütün altyapıyı kur" yaklaşımı reddedildi. CI ve
 (69 test, ruff, pyright, pre-commit, uv.lock eşit, uzak kopya eşit). Üç küçük tutarsızlık
 düzeltildi: B-006 notu pyright kapsamını eski gösteriyordu; sistem `core.autocrlf` ayarı
 K-003'e not düşüldü; depo kökü koruma deseni `.gitignore` ile eşitlendi. A-010 karara
-bağlandı (K-013: okuma veritabanında JSON metin sütunu). Reddedilen okumanın saklanması
-A-011 olarak açıldı. İnşa için kalanlar: anonim bir hesap ekstresi örneği ve ondan
+bağlandı (K-013: okuma veritabanında JSON metin sütunu). Reddedilen okuma da saklanır,
+REDDEDILDI durumuyla (K-013 ek; A-011 açılıp aynı oturumda kapandı). İnşa için kalanlar: anonim bir hesap ekstresi örneği ve ondan
 çıkarılacak okuma modeli (A-007 de onunla çözülür).

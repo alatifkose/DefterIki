@@ -31,8 +31,9 @@ modeliyle (A-010). Temel kat önceden doldurulmaz, hesap ekstresiyle birlikte ih
 oldukça büyür.
 Üçüncü inceleme (aynı gün) kodu temiz buldu, üç küçük belge/test tutarsızlığı düzeltti ve
 A-010'u kapattı: AI okuması veritabanında JSON metin sütununda saklanır (K-013), kayıtlar
-okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur. Reddedilen okumanın
-saklanması A-011 olarak açık. Sıradaki adım: anonim hesap ekstresi örneği ve okuma modeli.
+okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur; reddedilen okuma da
+REDDEDILDI durumuyla saklanır, kayıt türetilmez (K-013 ek). Sıradaki adım: anonim hesap
+ekstresi örneği ve okuma modeli.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
