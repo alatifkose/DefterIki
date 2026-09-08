@@ -293,10 +293,13 @@ dosya sisteminde doğrulama olanağını kaldırır.
 
 **Karar:** `CheckConstraint` her zaman `name=` ile yazılır; adsız kısıt yasaktır. Diğer kısıtlar
 (`pk`, `fk`, `uq`, `ix`) adlarını `model.py` içindeki adlandırma kuralından otomatik alır.
-Kural `tests/test_gocler.py` ile zorlanır: metadata'daki adsız kısıt testi kırar.
+Kural SQLAlchemy tarafından **tanım anında** zorlanır: adsız `CheckConstraint` tabloya
+bağlanırken `InvalidRequestError` verir, model modülü import bile edilemez.
+`tests/test_gocler.py` bu davranışı sınar ki kural zayıflatılırsa (token kaldırılırsa) fark
+edilsin.
 
 **Gerekçe:** Adlandırma kuralı `ck_%(table_name)s_%(constraint_name)s` biçimindedir; ad
-verilmezse SQLAlchemy DDL üretirken hata verir. SQLite adsız kısıtı sonradan düşüremez;
+verilmezse SQLAlchemy tablo tanımında hata verir (inceleme sırasında doğrulandı). SQLite adsız kısıtı sonradan düşüremez;
 Alembic batch modu adı bilmek zorundadır.
 
 **Reddedilen alternatif:** `ck_%(column_0_name)s` gibi sütundan türeyen ad. Çok sütunlu ve
