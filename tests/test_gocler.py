@@ -12,7 +12,16 @@ from pathlib import Path
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import CheckConstraint, Column, Engine, Integer, MetaData, Table
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Engine,
+    ForeignKeyConstraint,
+    Integer,
+    MetaData,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.exc import InvalidRequestError
 
 from defteriki.cekirdek.temel.model import ADLANDIRMA_KURALI, Temel
@@ -82,3 +91,34 @@ def test_adsiz_check_kisiti_tanim_aninda_reddedilir() -> None:
     )
     (kisit,) = (k for k in tablo.constraints if isinstance(k, CheckConstraint))
     assert str(kisit.name) == "ck_deneme_pozitif"
+
+
+def test_cok_sutunlu_kisitlar_ilk_sutunu_paylassa_da_farkli_ad_alir() -> None:
+    """`uq` ve `fk` adlari kisittaki tum sutunlardan turer.
+
+    Yalniz ilk sutun kullanilsaydi asagidaki iki unique kisit ayni adi alir ve SQLite
+    "index already exists" ile dururdu. Kural ilk gocten once sabitlendi; degisirse her
+    kisit icin yeniden adlandirma gocu gerekir.
+    """
+    meta = MetaData(naming_convention=ADLANDIRMA_KURALI)
+    Table("ana", meta, Column("id", Integer, primary_key=True), Column("kod", Integer))
+    tablo = Table(
+        "deneme",
+        meta,
+        Column("id", Integer, primary_key=True),
+        Column("a", Integer),
+        Column("b", Integer),
+        Column("c", Integer),
+        Column("ana_id", Integer),
+        Column("ana_kod", Integer),
+        UniqueConstraint("a", "b"),
+        UniqueConstraint("a", "c"),
+        ForeignKeyConstraint(["ana_id", "ana_kod"], ["ana.id", "ana.kod"]),
+    )
+    adlar = sorted(str(k.name) for k in tablo.constraints if k.name is not None)
+    assert adlar == [
+        "fk_deneme_ana_id_ana_kod_ana",
+        "pk_deneme",
+        "uq_deneme_a_b",
+        "uq_deneme_a_c",
+    ]
