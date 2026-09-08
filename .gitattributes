@@ -1,0 +1,8 @@
+# Depodaki tum metin dosyalari LF satir sonu ile saklanir ve LF ile calisilir.
+* text=auto eol=lf
+
+# Ikili dosyalar
+*.db binary
+*.png binary
+*.jpg binary
+*.pdf binary
