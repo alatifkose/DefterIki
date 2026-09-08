@@ -29,6 +29,10 @@ de geçici dizine yönlendiriyor (B-008), `busy_timeout` ilk pragma (B-009). İk
 daha: loglama ilk gerçek kullanımdan önce (A-009), AI okumasının saklanma biçimi ilk belge
 modeliyle (A-010). Temel kat önceden doldurulmaz, hesap ekstresiyle birlikte ihtiyaç
 oldukça büyür.
+Üçüncü inceleme (aynı gün) kodu temiz buldu, üç küçük belge/test tutarsızlığı düzeltti ve
+A-010'u kapattı: AI okuması veritabanında JSON metin sütununda saklanır (K-013), kayıtlar
+okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur. Reddedilen okumanın
+saklanması A-011 olarak açık. Sıradaki adım: anonim hesap ekstresi örneği ve okuma modeli.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -142,5 +146,5 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
   `uq` ve `fk` adları kısıttaki **tüm** sütunlardan türer (`column_0_N_name`), ilk sütunu
   paylaşan iki kısıt çakışmaz.
 - **Belge AI tarafından okunur, program doğrular** (K-010): okuma Pydantic ile doğrulanır,
-  belgeyle birlikte saklanır; kayıtlar saklı okumadan türer. Yeniden işleme AI'ya yeniden
-  sormak değildir.
+  veritabanında JSON metin sütununda saklanır (K-013); kayıtlar saklı okumadan türer ve
+  okumayla aynı işlemde yazılır. Yeniden işleme AI'ya yeniden sormak değildir.

@@ -324,6 +324,33 @@ sütunsuz (`length(x) > 0` gibi) kısıtlarda belirsiz kalır.
 
 ---
 
+## K-013 — AI okuması veritabanında, JSON metin sütununda saklanır
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Doğrulanmış AI okuması (K-010) veritabanında, belgeye bağlı bir **okuma**
+satırında saklanır. Satır şunları taşır: belge kimliği, sürüm numarası, yaşam durumu
+(AKTIF / YERINI_DEVRETTI, K-007), okuma zamanı ve içerik. İçerik, Pydantic modelinden
+üretilen JSON **metnidir** (TEXT sütunu); içinde bir **şema sürümü** alanı bulunur ki
+Pydantic modeli ilerde değişince eski okumaların hangi şemayla yazıldığı bilinsin.
+Okumadan türeyen kayıtlar bu satıra yabancı anahtarla bağlanır ve okumayla **aynı
+işlemde** yazılır. Belge arşivinde (K-011) yalnız orijinal belge baytları durur.
+
+JSON'un içine SQL ile bakılmaz: K-001 gereği SQLite'ın JSON1 fonksiyonları kullanılmaz.
+Okuma ara üründür; sorgulanacak her şey kayıt tablolarındadır.
+
+**Gerekçe:** Sürümleme ve yaşam durumu zaten veritabanı kavramıdır; "aktif okuma hangisi"
+tek sorgudur. Okuma ile kayıtlar tek işlemde yazıldığından çökme arada kalamaz. Arşiv saf
+kalır ve SHA-256 ile dosya sisteminde doğrulanabilir. Yedek yine tek klasördür.
+
+**Reddedilen alternatif:** Arşivde belgenin yanında dosya (`<sha>.okuma.1.json`).
+Dışarıdan okunabilir olması tek artısıydı; ama "hangisi aktif" bilgisi yine veritabanında
+tutulmak zorunda kalır (iki yerde durum), okuma dosyası ile kayıtlar farklı anlarda yazılır
+ve yedek iki kaynağın aynı anını yansıtmayabilir. İnsanın bakacağı şey belgenin kendisidir,
+okuma değil.
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**
@@ -340,7 +367,8 @@ Kovasız açık madde bırakılmaz.
 | A-007 | Ürün modelleri Alembic metadata'sına nasıl kaydolur | yapılacak | İlk ürün modeliyle birlikte çözülür: `alembic/env.py` ve `tests/conftest.py` model modüllerini açıkça içe alır; ayrı bir kayıt mekanizması kurulmaz |
 | A-008 | Kayıtların sahibi (kullanıcı/şirket) satır bazında tutulacak mı | şimdilik kabul | 8 Eylül 2026 kararı: **ilk sürümde dosyanın sahibi kullanıcıdır; satır bazında sahiplik yoktur.** Uygulama tek kullanıcı + tek SQLite dosyasıyla çalışıyor; ürün hedefi çok kullanıcılı olsa da bu bugün `user_id` sütunu gerektirmiyor. Ürünleştirme aşamasında yeniden değerlendirilir. Bilinçli erteleme; unutulmuş değil |
 | A-009 | Dosyaya loglama (K-001'de vaat edildi) henüz kurulmadı | yapılacak | Hesap ekstresinin önünde engel değil; **ilk gerçek kullanımdan önce** kurulur. Log dosyasının yeri K-004 kalıbıyla `ayarlar` modülünün sahipliğinde, veri dizininin altında olur. `alembic/env.py` içindeki `disable_existing_loggers=False` bu loglamanın göçler sırasında susmaması içindir |
-| A-010 | AI okuması nerede saklanır: veritabanında JSON sütunu mu, arşivde belgenin yanında dosya mı | yapılacak | K-010 "belgeyle birlikte saklanır" der ama yeri söylemez. **İlk belge modeliyle birlikte, ilk göçten önce** kararlaştırılır; sonradan taşımak göç ve arşiv dönüşümü ister. Ölçütler: yedek tek klasör (K-011), yeniden işleme saklı okumadan üretilir (K-010), okuma sürümlenir ve eskisi YERINI_DEVRETTI olur (K-007) |
+| A-010 | AI okuması nerede saklanır: veritabanında JSON sütunu mu, arşivde belgenin yanında dosya mı | kapandı | K-013 ile karara bağlandı (8 Eylül 2026): veritabanında JSON metin sütunu. Eski not: K-010 "belgeyle birlikte saklanır" der ama yeri söylemez. **İlk belge modeliyle birlikte, ilk göçten önce** kararlaştırılır; sonradan taşımak göç ve arşiv dönüşümü ister. Ölçütler: yedek tek klasör (K-011), yeniden işleme saklı okumadan üretilir (K-010), okuma sürümlenir ve eskisi YERINI_DEVRETTI olur (K-007) |
+| A-011 | Doğrulamada reddedilen okuma (açılış + hareketler ≠ kapanış) saklanır mı | yapılacak | İlk okuma modeliyle birlikte karar verilir. Masadaki öneri: reddedilen okuma da saklanır, yalnız okuma tablosuna özgü dördüncü durumla (REDDEDILDI); böylece "AI aynı belgeyi üç kez yanlış okudu" görülebilir ve kayıt türetilmediği açıkça bellidir. K-007'deki üç durum diğer tablolar için değişmez |
 
 ---
 
@@ -398,3 +426,11 @@ pragması `journal_mode`'dan sonra geliyordu (B-009). İki açık madde eklendi:
 önceden eksiksiz doldurulmaz; ihtiyaç oldukça büyütülür.** Hesap ekstresi için gerçekten
 ortak olacak parçalar (belge modeli ve arşivi, para ve tarih tipleri) ürünle birlikte
 temel kata girer; "önce bütün altyapıyı kur" yaklaşımı reddedildi. CI ve LICENSE bekler.
+
+**Altıncı oturum (8 Eylül 2026, üçüncü inşa öncesi inceleme).** Kod, testler ve araçlar temiz
+(69 test, ruff, pyright, pre-commit, uv.lock eşit, uzak kopya eşit). Üç küçük tutarsızlık
+düzeltildi: B-006 notu pyright kapsamını eski gösteriyordu; sistem `core.autocrlf` ayarı
+K-003'e not düşüldü; depo kökü koruma deseni `.gitignore` ile eşitlendi. A-010 karara
+bağlandı (K-013: okuma veritabanında JSON metin sütunu). Reddedilen okumanın saklanması
+A-011 olarak açıldı. İnşa için kalanlar: anonim bir hesap ekstresi örneği ve ondan
+çıkarılacak okuma modeli (A-007 de onunla çözülür).
