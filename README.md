@@ -38,6 +38,9 @@ verilmiş ama henüz bağımlılık olarak eklenmemiştir; sırası geldiğinde 
 uv sync
 ```
 
+Depo `C:\dev\DefterIki` altında, bulut senkronu yapılan bir klasörün **dışında** tutulur;
+yedek GitHub'dadır (K-005). Git ile OneDrive aynı klasörde iyi geçinmez.
+
 ## Komutlar
 
 Test:

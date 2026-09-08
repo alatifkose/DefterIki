@@ -96,6 +96,44 @@ boş kaldığı da sınanır. Kural bozulduğunda üç test birden kırılır (m
 
 ---
 
+## K-005 — Depo OneDrive dışında, yedek GitHub'da
+
+**Tarih:** 8 Eylül 2026
+
+**Karar:** Depo `C:\dev\DefterIki` altında tutulur; OneDrive'ın (ve genel olarak bulut
+senkronu yapılan bir klasörün) içinde bulunmaz. Yedekleme GitHub üzerinden yapılır:
+`https://github.com/alatifkose/DefterIki` (public), `origin/main` izlenir.
+
+**Gerekçe:** Depo `OneDrive\Masaüstü\DefterIki` altındaydı. Ölçüm: OneDrive'ın
+senkronladığı 7.822 dosyanın (108 MB) neredeyse tamamı `.venv` ve önbelleklerdi; gerçek
+proje 19 izlenen dosyaydı.
+
+1. *`.git` bozulma riski.* Git; index, ref ve paket dosyalarını sürekli yazıp siler.
+   OneDrive aynı dosyaları kilitleyip yüklerken çakışırsa git işlemleri takılır, daha
+   kötüsü bulut bir dosyanın eski sürümünü geri getirip depoyu tutarsız bırakabilir.
+   B-002'deki `.git` artık dosyası birikmesi bu ailedendi.
+2. *Günlük maliyet.* `.gitignore` OneDrive'ı ilgilendirmez; her `uv sync` sonrası binlerce
+   dosya yeniden senkronlanıyordu.
+3. *Files On-Demand.* OneDrive dosyaları "yalnız çevrimiçi"ye çevirebilir; okuma anında
+   indirme tetiklenir ve araçlar anlaşılmaz hatalarla düşer.
+4. *ASCII olmayan yol.* `Masaüstü` içindeki `ü`, pre-commit kancasının içine bozuk
+   kodlanmış olarak yazılmıştı. Yeni yolda bu sorun kendiliğinden ortadan kalktı.
+
+Sıra önemliydi: taşımadan **önce** GitHub deposu açıldı; aksi hâlde tek yedek olan
+OneDrive kopyası kaldırılınca proje yedeksiz kalırdı.
+
+**Reddedilen alternatifler:**
+- *Depo yerinde kalsın, OneDrive ayarından `.venv` senkron dışı bırakılsın.* Yalnız
+  günlük maliyeti (2) çözer; asıl risk olan `.git` bozulmasını (1) olduğu gibi bırakır.
+- *Yedek olarak OneDrive yeterlidir, GitHub'a gerek yok.* Git zaten sürümlü ve tarihçeli
+  bir yedektir; OneDrive ise çakışma çözmeyi kullanıcıya bırakır ve `.git` ile birlikte
+  çalışırken sorunun kaynağıdır.
+
+**Not:** Taşıma sonrası `.venv` `uv sync` ile, pre-commit kancası `pre-commit install` ile
+yeniden kuruldu; 13 test, ruff ve pyright yeni konumda doğrulandı.
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**
