@@ -24,6 +24,11 @@ kararlar: A-004 (iki konuya değen kural nereye yazılır, ilk örnekte), A-006 
 iki belgede görünmesi) ve A-007 (ürün modellerinin metadata kaydı, ilk modelle birlikte
 çözülür). A-008 (satır bazında sahiplik) bilinçli ertelendi: ilk sürümde dosyanın sahibi
 kullanıcıdır.
+İkinci inşa öncesi inceleme (aynı gün) iki hata düzeltti: test fikstürü artık belge arşivini
+de geçici dizine yönlendiriyor (B-008), `busy_timeout` ilk pragma (B-009). İki açık madde
+daha: loglama ilk gerçek kullanımdan önce (A-009), AI okumasının saklanma biçimi ilk belge
+modeliyle (A-010). Temel kat önceden doldurulmaz, hesap ekstresiyle birlikte ihtiyaç
+oldukça büyür.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.

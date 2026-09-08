@@ -333,6 +333,8 @@ Kovasız açık madde bırakılmaz.
 | A-006 | Aynı hareket iki belgede görünürse (hesap ekstresindeki kart ödemesi + kart ekstresindeki aynı ödeme) ne olur | yapılacak | Abdüllatif kararı erteledi. Masadaki öneri: her belge kendi kaydını yazar, ikisini bağlayan ayrı bir eşleştirme katmanı olur (öneri → onay → bozulabilir). Aynı mekanizma bir belgenin eksiğini (saat) başka belgeden tamamlamak için de gerekir (K-007). Hesap ekstresi tek başına bu kararı gerektirmiyor; kart gelmeden önce verilecek |
 | A-007 | Ürün modelleri Alembic metadata'sına nasıl kaydolur | yapılacak | İlk ürün modeliyle birlikte çözülür: `alembic/env.py` ve `tests/conftest.py` model modüllerini açıkça içe alır; ayrı bir kayıt mekanizması kurulmaz |
 | A-008 | Kayıtların sahibi (kullanıcı/şirket) satır bazında tutulacak mı | şimdilik kabul | 8 Eylül 2026 kararı: **ilk sürümde dosyanın sahibi kullanıcıdır; satır bazında sahiplik yoktur.** Uygulama tek kullanıcı + tek SQLite dosyasıyla çalışıyor; ürün hedefi çok kullanıcılı olsa da bu bugün `user_id` sütunu gerektirmiyor. Ürünleştirme aşamasında yeniden değerlendirilir. Bilinçli erteleme; unutulmuş değil |
+| A-009 | Dosyaya loglama (K-001'de vaat edildi) henüz kurulmadı | yapılacak | Hesap ekstresinin önünde engel değil; **ilk gerçek kullanımdan önce** kurulur. Log dosyasının yeri K-004 kalıbıyla `ayarlar` modülünün sahipliğinde, veri dizininin altında olur. `alembic/env.py` içindeki `disable_existing_loggers=False` bu loglamanın göçler sırasında susmaması içindir |
+| A-010 | AI okuması nerede saklanır: veritabanında JSON sütunu mu, arşivde belgenin yanında dosya mı | yapılacak | K-010 "belgeyle birlikte saklanır" der ama yeri söylemez. **İlk belge modeliyle birlikte, ilk göçten önce** kararlaştırılır; sonradan taşımak göç ve arşiv dönüşümü ister. Ölçütler: yedek tek klasör (K-011), yeniden işleme saklı okumadan üretilir (K-010), okuma sürümlenir ve eskisi YERINI_DEVRETTI olur (K-007) |
 
 ---
 
@@ -382,3 +384,11 @@ kaydı ilk modelle çözülür (A-007), A-002 kapandı.
 türetilecek biçimde düzeltildi (`column_0_N_name`; yalnız ilk sütunla iki kısıt aynı adı
 alabiliyordu). Sahiplik sorusu A-008 olarak açıldı ve bilinçli ertelendi. K-002 gerekçesi
 ve K-011'deki yol yazımı (dosyaya sızmış backspace baytı) düzeltildi.
+
+**Beşinci oturum (8 Eylül 2026, ikinci inşa öncesi inceleme).** İki gerçek hata düzeltildi:
+test fikstürü belge arşivini geçici dizine yönlendirmiyordu (B-008), `busy_timeout`
+pragması `journal_mode`'dan sonra geliyordu (B-009). İki açık madde eklendi: loglama
+(A-009), AI okumasının saklanma biçimi (A-010). Abdüllatif'in yön kararı: **temel kat
+önceden eksiksiz doldurulmaz; ihtiyaç oldukça büyütülür.** Hesap ekstresi için gerçekten
+ortak olacak parçalar (belge modeli ve arşivi, para ve tarih tipleri) ürünle birlikte
+temel kata girer; "önce bütün altyapıyı kur" yaklaşımı reddedildi. CI ve LICENSE bekler.
