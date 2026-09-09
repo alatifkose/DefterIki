@@ -10,11 +10,10 @@ tasarlanıyor; iş kuralları ikisinden de bağımsız bir çekirdekte toplanır
 
 **İnşaya hazır iskelet.** 8 Eylül 2026'da inşadan önce verilmesi gereken kararlar
 alındı (K-006..K-009): belge tek doğruluk kaynağı, veri sözleşmesi (para/tarih/kimlik/
-yaşam durumu), katmanlı düzen ve başlangıç konusu olarak **hesap ekstresi**. Aynı gün
+yaşam durumu) ve başlangıç konusu olarak **hesap ekstresi**. Aynı gün
 teknik hazırlık tamamlandı: veritabanı motoru tek modülde (WAL, yabancı anahtar,
 meşgul bekleme, `synchronous=NORMAL`), model tabanı ve kısıt adlandırma kuralı, Alembic
-batch modu, gerçek göçlerle açılan test fikstürü, "göç = model" testi ve katman kuralını
-zorlayan test.
+batch modu, gerçek göçlerle açılan test fikstürü ve "göç = model" testi.
 Aynı gün inceleme sonrası üç karar daha alındı: belgeyi AI okur, determinizm doğrulama ve
 kayıt katmanında aranır (K-010); belge arşivi yolu da ayarların tek sahipliğinde (K-011,
 kodda ve testte); her `CheckConstraint` adlıdır (K-012, testle zorlanır). Alan modeli henüz
@@ -35,8 +34,11 @@ okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur; redded
 REDDEDILDI durumuyla saklanır, kayıt türetilmez (K-013 ek).
 Aynı gün paket iskeleti kuruldu: `kurumlar`, `urunler`, `belgeler`, `kayitlar`, `akislar`.
 Dosyalar **boş**; içlerinde yalnız konu özeti var, tablo ve kod yok. Alan modelinin
-kendisi henüz yazılmadı. Bu iskelet K-008'in üç katlı planının (`cekirdek/urunler`,
-`cekirdek/yorum`) yerini alıyor; K-008 metni bu yüzden güncellenmeyi bekliyor.
+kendisi henüz yazılmadı.
+
+9 Eylül 2026: katman düzeni tamamen kaldırıldı (K-008 geri alındı). Paket ve dosya yapısı
+olduğu gibi duruyor; kalkan, bağımlılığın tek yöne akmasını şart koşan kural ve onu zorlayan
+testtir. Yerine yeni bir kural konmadı.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -116,7 +118,7 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
 
 | Yol | İçerik |
 |---|---|
-| `src/defteriki/ayarlar.py` | Yol ve ortam kararları (veritabanı, belge arşivi); en alt kat |
+| `src/defteriki/ayarlar.py` | Yol ve ortam kararları (veritabanı, belge arşivi) |
 | `src/defteriki/cekirdek/temel/` | Veritabanı motoru (`veritabani.py`), model tabanı (`model.py`) |
 | `src/defteriki/kurumlar/` | Bankalar ve benzeri kurumlar (`model.py`, `servis.py`) |
 | `src/defteriki/urunler/` | Bir kuruma ait hesap, kart, kredi, KMH (`model.py`, `servis.py`) |
@@ -138,12 +140,6 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
   pre-commit kancası çalışmıyor (bkz. `BULGULAR.md` B-003); oradan yalnız belge/metin
   dosyaları `--no-verify` ile commit'lenir.
 - Depoda ve çalışma kopyasında satır sonu **LF**, kodlama **UTF-8** (K-003).
-- **Bağımlılık tek yöne akar** (K-008): ayarlar → temel → kurumlar → urunler → belgeler →
-  kayitlar → akislar → mcp/arayuz. Ürün kurumu tanır, belge ürünü, kayıt belgeyi; akış
-  hepsini tanır, aşağısı yukarısını tanımaz. Fonksiyon içinde `import` yok.
-  `tests/test_katmanlar.py` zorlar; yeni paket açılınca oradaki `KATLAR` haritasına
-  eklenir. K-008'in metni hâlâ eski üç katlı planı anlatıyor; sıra ondan değil buradan
-  okunur, karar güncellenene kadar.
 - **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
   kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
 - **`create_engine` paket içinde yalnız `cekirdek/temel/veritabani.py`'de** çağrılır; SQLite

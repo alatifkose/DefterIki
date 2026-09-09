@@ -88,6 +88,8 @@ aktarımında test ya yanlış yerden kırılır ya da gerçek bir ihlali kaçı
 **Çözüm:** `_ic_importlar` artık modülün paket olup olmadığını (`paket_mi`) biliyor; çözüm
 Python kuralıyla birebir. Dört durumu (modül/paket × bir/çok seviye) sınayan test eklendi.
 
+9 Eylül 2026: `test_katmanlar.py` kaldırıldı; bu bulgu artık geçmiş kaydıdır.
+
 ---
 
 ## B-005 — "create_engine yalnız veritabani.py'de" kuralı env.py ile çelişiyordu

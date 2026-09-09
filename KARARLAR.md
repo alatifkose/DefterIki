@@ -209,35 +209,28 @@ sütunlar); fiziksel silme (finansal iz kaybolur).
 
 ---
 
-## K-008 — Katmanlı düzen: bağımlılık tek yöne akar
+## K-008 — Katmanlı düzen (GERİ ALINDI, 9 Eylül 2026)
 
-**Tarih:** 8 Eylül 2026
+**Tarih:** 8 Eylül 2026 · **Geri alındı:** 9 Eylül 2026
 
-**Karar:** Paket üç bölgeye ayrılır: `cekirdek/` (iş kuralları), `mcp/` (Cowork kapısı),
-`arayuz/` (masaüstü ekranları). `mcp` ve `arayuz` çekirdeğe sorar; çekirdek onları tanımaz.
-Çekirdek kendi içinde üç kata bölünür, aşağıdan yukarı:
+**Kararın özeti (artık geçerli değil):** Paket üç bölgeye ayrılıyordu — `cekirdek/` (iş
+kuralları), `mcp/` (Cowork kapısı), `arayuz/` (masaüstü ekranları); `mcp` ve `arayuz`
+çekirdeğe soracak, çekirdek onları tanımayacaktı. Çekirdek kendi içinde üç kata
+bölünüyordu, aşağıdan yukarı `temel` → `urunler` → `yorum`. Kural: bir modül yalnız kendi
+katının altındakileri içe alabilir; aynı kattaki ürünler birbirine uzanamaz; fonksiyon içi
+`import` yasaktır. Kural `tests/test_katmanlar.py` ile makineyle zorlanıyordu.
 
-1. **temel:** bankalar, belgeler, para/tarih tipleri, veritabanı motoru.
-2. **urunler:** hesaplar, kartlar, krediler, KMH. Her ürün yalnız temeli tanır;
-   ürünler **birbirini tanımaz**.
-3. **yorum:** eşleştirme, giderler, işleme, raporlar. Alttaki katları tanır.
+**Geri alma:** 9 Eylül 2026'da kural da onu zorlayan test de kaldırıldı. Paket ve dosya
+yapısı olduğu gibi duruyor; kalkan yalnızca kuralın kendisi ve zorlamasıdır. Yerine yeni
+bir kural konmadı.
 
-Kural: bir modül yalnız kendi katının altındakileri içe alabilir; aynı kattaki ürünler
-birbirine uzanamaz; fonksiyon içi `import` yasaktır. Kural `tests/test_katmanlar.py` ile
-korunur; çiğnendiğinde test kırılır. A-003 bu kararla kapanır.
+**Gerekçe:** Yapı henüz oturmadan katman disiplini gereğinden fazla kısıt getiriyordu.
+Alan modeli daha yazılmamışken hangi parçanın nerede duracağı bir haritada sabitleniyor,
+açılan her paket kuralla uyuşmak zorunda kalıyordu; kısıt, henüz keşfedilmemiş bir düzeni
+korumak için ödeniyordu.
 
-Gerçek hayat ilişkileri bu düzende şöyle durur: kart bankayı tanır (temel), banka kartı
-tanımaz; ödeme ile hesap hareketini bağlayan eşleştirme yorum katındadır, hesaplar da
-kartlar da ödemeyi bilmez; belge modülü ürünleri tanımaz, her ürünün kendi okuyucusu
-belgeyi tanır, "şu belgeyi işle" emrini yorum katındaki işleme modülü verir; gider,
-hareketin üstüne yazılan etikettir, giderler kartı tanır, kartlar gideri tanımaz.
-
-**Gerekçe:** Defter'de 12 modülün çoğu 9-12 modül tarafından içe alınıyordu ve karşılıklı
-döngüler vardı; 247 fonksiyon-içi import bu döngülerden kaçmak için yazılmıştı. Tek yönlü
-akış, yanlış çıkan parçanın tek başına atılabilmesini sağlar.
-
-**Reddedilen alternatif:** "Konular birbirini hiç tanımaz." Gerçek ilişkileri (kart→banka,
-gider→hareket) yasaklar; uygulanamaz. Tek yön yeterli, döngü yasak.
+K-002 (çekirdek/arayüz sınırı, HTTP katmanı yok) ayrı bir karardır ve durur; bu geri alma
+onu kapsamaz.
 
 ---
 
@@ -425,7 +418,7 @@ Kovasız açık madde bırakılmaz.
 |---|-------|------|-----|
 | A-001 | pre-commit kancaları Cowork'ün kabuğundan çalışmıyor | şimdilik kabul | Kod commit'leri Windows tarafından alınır; bkz. `BULGULAR.md` B-003 |
 | A-002 | Claude Desktop'ın güvenilen klasör kaydı hâlâ eski OneDrive yolunu gösteriyor | kapandı | Çalışma dizini `C:\dev\DefterIki`; Claude Code oturumları buradan açılıyor (8 Eylül 2026) |
-| A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | kapandı | K-008 ile karara bağlandı, `tests/test_katmanlar.py` koruyor |
+| A-003 | Çekirdek/arayüz sınırı kodda zorlanmıyor | şimdilik kabul | K-008 geri alındı (9 Eylül 2026); sınır bilinçli olarak kodda zorlanmıyor |
 | A-004 | İki konuya birden değen kural nereye yazılır | yapılacak | Şimdi kararlaştırılmıyor: ilk gerçek örnek çıktığında, somut vaka elde varken verilecek |
 | A-005 | Her kaydın kaynak belgesine geri izlenebilir olması | kapandı | K-006 ile karara bağlandı |
 | A-006 | Aynı hareket iki belgede görünürse (hesap ekstresindeki kart ödemesi + kart ekstresindeki aynı ödeme) ne olur | yapılacak | Abdüllatif kararı erteledi. Masadaki öneri: her belge kendi kaydını yazar, ikisini bağlayan ayrı bir eşleştirme katmanı olur (öneri → onay → bozulabilir). Aynı mekanizma bir belgenin eksiğini (saat) başka belgeden tamamlamak için de gerekir (K-007). Hesap ekstresi tek başına bu kararı gerektirmiyor; kart gelmeden önce verilecek |
@@ -472,7 +465,8 @@ etmek. Kendi çekincesi: bu bir geri alma döngüsü yaratabilir.
 
 **Sonuç (8 Eylül 2026, ikinci oturum).** İki ilke K-008 oldu; başlangıç konusu K-009 ile
 hesap ekstresi seçildi. Belge–kayıt yönü K-006, veri sözleşmesi K-007. Açıkta kalan tek
-soru A-006 (aynı hareketin iki belgede görünmesi).
+soru A-006 (aynı hareketin iki belgede görünmesi). K-008 sonradan geri alındı
+(9 Eylül 2026); yukarıdaki iki ilke artık kodda zorlanmıyor.
 
 **Üçüncü oturum (8 Eylül 2026).** İnceleme sonrası altı karar: belgeyi AI okur (K-010),
 arşiv yolu ayarlarda (K-011), kısıtlar adlı (K-012), tamsayı PK kalır (K-007 ek), metadata
