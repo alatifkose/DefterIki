@@ -28,3 +28,6 @@ wheels/
 .pytest_cache/
 .ruff_cache/
 .hypothesis/
+
+# Cowork'un sohbete verilen dosyalari yazdigi klasor; depoya girmez
+Claude outputs/

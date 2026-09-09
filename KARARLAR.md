@@ -358,6 +358,64 @@ satırda tutulur ki iz tek başına okunabilsin.
 
 ---
 
+## K-014 — Kurum listesi tohumlanmaz
+
+**Tarih:** 9 Eylül 2026
+
+**Karar:** Uygulama hazır bir kurum listesiyle gelmez. `kurumlar` tablosu boş başlar; her
+kurum yalnızca kullanıcının verdiği bir belgeden doğar. Kurulumda, ilk açılışta veya bir
+göçle tabloya önceden satır yazılmaz (tohumlama yapılmaz).
+
+**Gerekçe:** Tohumlanmış liste, kullanıcının gerçek durumuyla ilgisi olmayan bir veri
+kütlesidir: kimsenin çalışmadığı kurumlar tabloda durur, bakımı gerekir (banka birleşir,
+ad değiştirir, yenisi çıkar) ve bu bakım uygulamanın işi değildir. Daha ağırı, eşleme
+sorununu çözmez, ikiye katlar: belgeden gelen ad tohumlanmış satırla eşleşmezse yeni satır
+doğar ve elde biri kullanılan biri kullanılmayan iki kurum kalır. Boş tabloda ise tablodaki
+her satırın kaynağı bellidir — onu doğuran bir belge vardır. Bu, K-006'nın (belge tek
+doğruluk kaynağıdır) kurum tablosundaki karşılığıdır.
+
+**Reddedilen alternatif:** Türkiye'deki bankaların listesini kurulumda yüklemek. Tek artısı
+ilk belgede eşlemenin daha kolay görünmesiydi; bu kolaylık, yukarıdaki bakım ve mükerrer
+maliyetini karşılamıyor. Mükerrer riski liste ile değil, uygulama içindeki ad normalize
+etme ve eşleme mantığıyla çözülür.
+
+**Kapsam dışı:** Bilinmeyen bir kurum adı geldiğinde uygulamanın ne yapacağı (sessizce
+açmak / sormak / öneri sunmak) ve mükerrer doğduğunda birleştirmenin nasıl yapılacağı bu
+kararın konusu değildir; ikisi de açık madde olarak durur ve kurum eşleme yazılmadan önce
+karara bağlanır.
+
+---
+
+## K-015 — Depo köküne belge dosyası onaysız yazılmaz
+
+**Tarih:** 9 Eylül 2026
+
+**Karar:** Depo kökünde yeni bir **belge** dosyası (PDF, `.md`, `.txt`, rapor, plan, not)
+Abdüllatif'in açık onayı olmadan oluşturulmaz. Köke belge gerekiyorsa önce sorulur.
+
+Kapsam:
+- Kural yalnızca **kökü** ve **belge** dosyalarını bağlar.
+- Kaynak kod dosyaları (`.py` vb.) kural dışıdır; onlar zaten ayrı bir izne tabidir
+  (kodda değişiklik kullanıcının onayına bağlıdır).
+- Alt dizinlere yazmak bu kuralın konusu değildir.
+- Kökteki mevcut belgeleri (`KARARLAR.md`, `BULGULAR.md`, `README.md`) güncellemek yeni
+  dosya oluşturmak sayılmaz.
+
+**Gerekçe:** Depo kökü projenin giriş kapısıdır; orada duran her dosya "bu proje nedir"
+sorusunun cevabının parçasıdır. Kendiliğinden biriken rapor, plan ve not dosyaları bu
+cevabı bulandırır; kısa sürede hangisinin güncel, hangisinin bir oturumun artığı olduğu
+anlaşılmaz hâle gelir. Kökte ne duracağına Abdüllatif karar verir.
+
+**Reddedilen alternatif:** Kuralsız bırakmak — yani bugüne kadarki durum: belgeler köke
+serbestçe yazılır, gerekirse sonradan toplanır. Toplama işi hep sonraya kalır ve kök
+sessizce şişer. Onay kapısı, dosya oluşmadan önce durduğu için sonradan temizlik
+gerektirmiyor.
+
+**Kapsam dışı:** Onay verildiğinde belgenin köke mi yoksa bir alt dizine mi gireceği ve
+böyle bir dizinin adı bu kararın konusu değildir; henüz konuşulmadı.
+
+---
+
 ## Açık maddeler
 
 Her açık madde üç kovadan birine girer: **yapılacak / şimdilik kabul / yapılmayacak.**
