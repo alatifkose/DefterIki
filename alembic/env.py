@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 from defteriki import ayarlar
-from defteriki.cekirdek.temel.model import Temel
+from defteriki.temel.model import Temel
 
 # Alembic Config nesnesi: alembic.ini icindeki degerlere erisim saglar.
 config = context.config

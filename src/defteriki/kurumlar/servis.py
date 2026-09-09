@@ -1,1 +1,0 @@
-"""Kurum işlemleri."""

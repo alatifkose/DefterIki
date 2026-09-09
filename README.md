@@ -32,13 +32,20 @@ oldukça büyür.
 A-010'u kapattı: AI okuması veritabanında JSON metin sütununda saklanır (K-013), kayıtlar
 okumayla aynı işlemde yazılır, arşivde yalnız orijinal belge durur; reddedilen okuma da
 REDDEDILDI durumuyla saklanır, kayıt türetilmez (K-013 ek).
-Aynı gün paket iskeleti kuruldu: `kurumlar`, `urunler`, `belgeler`, `kayitlar`, `akislar`.
-Dosyalar **boş**; içlerinde yalnız konu özeti var, tablo ve kod yok. Alan modelinin
-kendisi henüz yazılmadı.
+Aynı gün `kurumlar`, `urunler`, `belgeler`, `kayitlar`, `akislar` paket iskeleti kuruldu;
+dosyalar boştu, içlerinde yalnız konu özeti vardı.
 
-9 Eylül 2026: katman düzeni tamamen kaldırıldı (K-008 geri alındı). Paket ve dosya yapısı
-olduğu gibi duruyor; kalkan, bağımlılığın tek yöne akmasını şart koşan kural ve onu zorlayan
-testtir. Yerine yeni bir kural konmadı.
+9 Eylül 2026: katman düzeni tamamen kaldırıldı (K-008 geri alındı); bağımlılığın tek yöne
+akmasını şart koşan kural ve onu zorlayan test gitti, yerine yeni bir kural konmadı. Aynı gün
+boş iskelet paketleri de silindi ve `cekirdek/temel/` bir seviye yukarı, `defteriki/temel/`
+oldu. Pakette bugün yalnız gerçekten çalışan kod duruyor: `ayarlar.py` ve `temel/`
+(veritabanı motoru, model tabanı). Alan modeli hesap ekstresiyle birlikte yazılacak;
+paketler ihtiyaç doğdukça, içi dolu olarak açılır.
+
+Aynı gün `tests/` dizini ile karar defteri (`KARARLAR.md`) ve bulgu defteri
+(`BULGULAR.md`) da depodan kaldırıldı. Metinleri git geçmişinde duruyor; yukarıdaki
+K-00x / B-00x numaraları o geçmişe işaret eder, depoda karşılıkları artık yoktur.
+Bugün otomatik test yok: `ruff` ve `pyright` dışında doğrulama katmanı bulunmuyor.
 
 Bu bölüm proje ilerledikçe güncellenir; okuyan kişi buraya bakıp nerede olunduğunu
 görebilmelidir.
@@ -54,10 +61,9 @@ görebilmelidir.
 | Doğrulama | Pydantic v2 — MCP girdileri ile servis girdileri aynı modeller |
 | Arayüz | FastMCP (stdio) + PySide6 masaüstü, koyu tema |
 | Para | Kuruş tamsayı; girişte `Decimal`, `float` yok |
-| Test | pytest + Hypothesis |
 | Kalite | ruff, pyright (strict), pre-commit |
 
-Gerekçeler ve reddedilen alternatifler `KARARLAR.md` içindedir. FastMCP ve PySide6 karar
+FastMCP ve PySide6 karar
 verilmiş ama henüz bağımlılık olarak eklenmemiştir; sırası geldiğinde eklenir.
 
 ## Kurulum
@@ -73,12 +79,6 @@ yedek GitHub'dadır (K-005). Git ile OneDrive aynı klasörde iyi geçinmez.
 
 ## Komutlar
 
-Test:
-
-```powershell
-uv run pytest
-```
-
 Lint ve biçim (`alembic/` dahil, pre-commit ile aynı kapsam):
 
 ```powershell
@@ -86,7 +86,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-Tip denetimi (strict; `src`, `tests` ve `alembic`):
+Tip denetimi (strict; `src` ve `alembic`):
 
 ```powershell
 uv run pyright
@@ -106,7 +106,7 @@ uv run alembic upgrade head
 | Belge arşivi | `%LOCALAPPDATA%\DefterIki\belgeler\` |
 
 Veritabanı yolu `DEFTERIKI_VERITABANI`, arşiv dizini `DEFTERIKI_BELGE_ARSIVI` ortam
-değişkeniyle ayrı ayrı değiştirilebilir; testler bunu kullanır. Windows dışında (CI, Linux
+değişkeniyle ayrı ayrı değiştirilebilir. Windows dışında (CI, Linux
 kabuğu) XDG karşılığına düşer.
 
 İki yolun da **tek sahibi** `src/defteriki/ayarlar.py` modülüdür (K-004, K-011);
@@ -119,34 +119,22 @@ WAL dosyaları birlikte veri bozulmasına yol açar.
 | Yol | İçerik |
 |---|---|
 | `src/defteriki/ayarlar.py` | Yol ve ortam kararları (veritabanı, belge arşivi) |
-| `src/defteriki/cekirdek/temel/` | Veritabanı motoru (`veritabani.py`), model tabanı (`model.py`) |
-| `src/defteriki/kurumlar/` | Bankalar ve benzeri kurumlar (`model.py`, `servis.py`) |
-| `src/defteriki/urunler/` | Bir kuruma ait hesap, kart, kredi, KMH (`model.py`, `servis.py`) |
-| `src/defteriki/belgeler/` | Arşiv, belge kimliği ve okumalar (`model.py`, `okumalar.py`, `servis.py`) |
-| `src/defteriki/kayitlar/` | Belgelerden türeyen finansal kayıtlar (`model.py`, `servis.py`) |
-| `src/defteriki/akislar/` | Birden çok paketi sırayla kullanan uçtan uca işler (`belge_isle.py`) |
+| `src/defteriki/temel/` | Veritabanı motoru (`veritabani.py`), model tabanı (`model.py`) |
 | `src/defteriki/mcp/`, `arayuz/` | Cowork kapısı ve masaüstü (henüz yok) |
-| `tests/` | Testler; `conftest.py` her teste geçici veri dizini verir (veritabanı + arşiv) ve şemayı gerçek göçlerle kurar |
 | `alembic/` | Şema göçleri (`versions/` bugün boş) |
-| `KARARLAR.md` | Mimari karar defteri: karar, gerekçe, reddedilen alternatif |
-| `BULGULAR.md` | Çalışma sırasında çıkan sorunlar ve durumları |
 
 ## Çalışma kuralları
 
-- **Karar defteri sohbetten üstündür.** Bir mimari karar `KARARLAR.md` içinde yazılı
-  değilse verilmemiş sayılır.
-- **Açık madde kovasız bırakılmaz:** yapılacak / şimdilik kabul / yapılmayacak.
 - **Python kodu içeren commit'ler Windows tarafından alınır.** Cowork'ün kabuğunda
-  pre-commit kancası çalışmıyor (bkz. `BULGULAR.md` B-003); oradan yalnız belge/metin
+  pre-commit kancası çalışmıyor; oradan yalnız belge/metin
   dosyaları `--no-verify` ile commit'lenir.
 - Depoda ve çalışma kopyasında satır sonu **LF**, kodlama **UTF-8** (K-003).
-- **Model değişikliği göçüyle gelir.** Testler şemayı Alembic ile kurar, `create_all`
-  kullanılmaz; `tests/test_gocler.py` head şeması ile modelleri karşılaştırır.
-- **`create_engine` paket içinde yalnız `cekirdek/temel/veritabani.py`'de** çağrılır; SQLite
+- **Model değişikliği göçüyle gelir.** Şema Alembic ile kurulur, `create_all` kullanılmaz.
+- **`create_engine` paket içinde yalnız `temel/veritabani.py`'de** çağrılır; SQLite
   pragmaları oradan gelir (WAL, `foreign_keys=ON`, `busy_timeout`, `synchronous=NORMAL`:
   WAL ile birlikte güvenli, her commit'te disk senkronu beklemez). Tek bilinçli istisna
   `alembic/env.py`: göç sırasında yabancı anahtar kapalı kalmalı, bu yüzden Alembic
-  motorunu pragmasız kendisi kurar (K-004 ek). İki kural da testle korunur.
+  motorunu pragmasız kendisi kurar (K-004 ek).
 - **Her `CheckConstraint` adlıdır** (K-012): `name=` verilmeden yazılmaz; adsız kısıt
   SQLAlchemy'de tanım anında hata verir. Diğer kısıtlar adını `model.py` kuralından alır;
   `uq` ve `fk` adları kısıttaki **tüm** sütunlardan türer (`column_0_N_name`), ilk sütunu
