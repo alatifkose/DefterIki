@@ -12,5 +12,35 @@ wheels/
 
 # Tool caches
 .pytest_cache/
+.hypothesis/
 .ruff_cache/
 .mypy_cache/
+
+# Veritabanı (SQLite) ve WAL/SHM/journal dosyaları — kişisel finans verisi içerir
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Kişisel veri (belgeler, ekstreler, yedekler)
+veri/
+belgeler/
+yedek/
+logs/
+*.bak
+
+# Secret / yerel ayar
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+
+# Yerel çalışma belgeleri
+DEFTERIKI-Gelistirme-Plani.md
