@@ -51,10 +51,9 @@ def test_ortam_verilmezse_gelistirme_kullanilir(ortak_kok: Path) -> None:
 def test_yollar_pathlib_path_olarak_tutulur(ortak_kok: Path) -> None:
     ayar = ay.ayarlari_yukle()
 
-    assert all(
-        isinstance(yol, Path)
-        for yol in (ayar.veri_koku, ayar.veritabani_yolu, ayar.belge_dizini, ayar.log_dizini)
-    )
+    yollar = (ayar.veri_koku, ayar.veritabani_yolu, ayar.belge_dizini, ayar.log_dizini)
+
+    assert all(isinstance(yol, Path) for yol in yollar)
 
 
 def test_gelistirme_ve_gercek_yollari_ayrilir(
@@ -96,11 +95,18 @@ def test_windows_localappdata_yoksa_aciklayici_hata(
         ay.ayarlari_yukle()
 
 
+def _ev_dizinini_sabitle(monkeypatch: pytest.MonkeyPatch, ev: Path) -> None:
+    def ev_dizini(cls: type[Path]) -> Path:
+        return ev
+
+    monkeypatch.setattr(Path, "home", classmethod(ev_dizini))
+
+
 def test_linux_varsayilan_kok_xdg_veya_ev_altindadir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(ay.sys, "platform", "linux")
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "ev"))
+    _ev_dizinini_sabitle(monkeypatch, tmp_path / "ev")
 
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     assert ay.ayarlari_yukle().veri_koku == (
@@ -108,14 +114,16 @@ def test_linux_varsayilan_kok_xdg_veya_ev_altindadir(
     )
 
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert ay.ayarlari_yukle().veri_koku == tmp_path / "xdg" / "DEFTERIKI" / "gelistirme"
+    assert ay.ayarlari_yukle().veri_koku == (
+        tmp_path / "xdg" / "DEFTERIKI" / "gelistirme"
+    )
 
 
 def test_macos_varsayilan_kok_application_support_altindadir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(ay.sys, "platform", "darwin")
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "ev"))
+    _ev_dizinini_sabitle(monkeypatch, tmp_path / "ev")
 
     assert ay.ayarlari_yukle().veri_koku == (
         tmp_path / "ev" / "Library" / "Application Support" / "DEFTERIKI" / "gelistirme"
@@ -327,7 +335,8 @@ def test_test_ortaminda_ust_dizin_ile_kacis_reddedilir(
     ortak_kok: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv(ay.ORTAM_DEGISKENI, "test")
-    monkeypatch.setenv(ay.BELGE_DIZINI_DEGISKENI, str(ortak_kok / "test" / ".." / "gercek"))
+    kacan_yol = ortak_kok / "test" / ".." / "gercek"
+    monkeypatch.setenv(ay.BELGE_DIZINI_DEGISKENI, str(kacan_yol))
 
     with pytest.raises(ay.AyarHatasi, match="test veri kökünün dışına"):
         ay.ayarlari_yukle()

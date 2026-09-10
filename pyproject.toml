@@ -19,8 +19,32 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "hypothesis>=6.168.0",
+    "pyright>=1.1.414",
     "pytest>=9.1.1",
+    "ruff>=0.16.7",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["scripts"]
+
+[tool.ruff]
+target-version = "py313"
+src = ["src", "tests", "scripts"]
+extend-exclude = [".venv", ".uv", "build", "dist", "wheels"]
+
+[tool.ruff.lint]
+# E: pycodestyle hatalari, F: pyflakes (kullanilmayan import/degisken, tanimsiz ad), I: import siralama
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["defteriki", "kontrol"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+include = ["src", "tests", "scripts"]
+exclude = ["**/__pycache__", ".venv", ".uv", "build", "dist", "wheels"]
+extraPaths = ["src", "scripts"]
+venvPath = "."
+venv = ".venv"

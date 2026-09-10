@@ -83,7 +83,9 @@ def ayarlari_yukle() -> Ayarlar:
     ortam = _ortami_oku()
     veri_koku = _ortak_koku_belirle(ortam) / ortam.value
 
-    veritabani_yolu = _yol_oku(VERITABANI_YOLU_DEGISKENI) or veri_koku / VERITABANI_DOSYA_ADI
+    veritabani_yolu = (
+        _yol_oku(VERITABANI_YOLU_DEGISKENI) or veri_koku / VERITABANI_DOSYA_ADI
+    )
     belge_dizini = _yol_oku(BELGE_DIZINI_DEGISKENI) or veri_koku / BELGE_DIZIN_ADI
     log_dizini = _yol_oku(LOG_DIZINI_DEGISKENI) or veri_koku / LOG_DIZIN_ADI
 
@@ -141,7 +143,8 @@ def _ortami_oku() -> Ortam:
         return Ortam(deger)
     except ValueError:
         raise AyarHatasi(
-            f"{ORTAM_DEGISKENI} bilinmeyen değer: {deger!r}; geçerli değerler: {gecerli}."
+            f"{ORTAM_DEGISKENI} bilinmeyen değer: {deger!r}; "
+            f"geçerli değerler: {gecerli}."
         ) from None
 
 
@@ -162,8 +165,8 @@ def _platform_veri_koku() -> Path:
         deger = os.environ.get("LOCALAPPDATA", "").strip()
         if not deger:
             raise AyarHatasi(
-                "Windows'ta varsayılan veri kökü için LOCALAPPDATA gerekli ama tanımlı değil; "
-                f"{VERI_KOKU_DEGISKENI} ile açıkça verin."
+                "Windows'ta varsayılan veri kökü için LOCALAPPDATA gerekli "
+                f"ama tanımlı değil; {VERI_KOKU_DEGISKENI} ile açıkça verin."
             )
         taban = Path(deger)
         if not taban.is_absolute():
@@ -174,7 +177,8 @@ def _platform_veri_koku() -> Path:
         ev = Path.home()
     except RuntimeError as hata:
         raise AyarHatasi(
-            f"Kullanıcı ev dizini belirlenemedi; {VERI_KOKU_DEGISKENI} ile açıkça verin."
+            "Kullanıcı ev dizini belirlenemedi; "
+            f"{VERI_KOKU_DEGISKENI} ile açıkça verin."
         ) from hata
 
     if sys.platform == "darwin":
