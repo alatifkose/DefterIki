@@ -1,0 +1,17 @@
+# Satır sonları: depoda LF; metin dosyaları otomatik algılanır
+* text=auto eol=lf
+
+# Windows betikleri CRLF ile kalır
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# İkili dosyalar
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.sqlite3 binary
+*.db binary
