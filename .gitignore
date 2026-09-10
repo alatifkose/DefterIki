@@ -6,28 +6,11 @@ dist/
 wheels/
 *.egg-info/
 
-# Sanal ortam / uv
+# Virtualenv / uv
 .venv/
 .uv/
 
-# SQLite: veritabani dosyalari ve SQLite'in yanlarinda tuttugu WAL/SHM eslikcileri.
-# Canli veritabani depoda durmaz (K-004: %LOCALAPPDATA%\DefterIki altinda). Bu desenler
-# kazayla depoya dusen bir kopyanin commit'lenmesini engeller ve
-# tests/test_gitignore.py ile korunur.
-*.db
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite-wal
-*.sqlite-shm
-*.sqlite3
-*.sqlite3-wal
-*.sqlite3-shm
-
-# Arac onbellekleri
+# Tool caches
 .pytest_cache/
 .ruff_cache/
-.hypothesis/
-
-# Cowork'un sohbete verilen dosyalari yazdigi klasor; depoya girmez
-Claude outputs/
+.mypy_cache/
