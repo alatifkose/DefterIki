@@ -128,6 +128,7 @@ src/defteriki/    uygulama paketi
   gunluk.py       teknik hata günlüğü
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)
+kavramlar_sozlugu.md   ortak kavram tanımları; ekleme ve değişiklik yalnız Abdüllatif'in onayıyla
 ```
 
 ## Teknoloji
