@@ -13,7 +13,8 @@ Aşama 2 (proje temeli) sürüyor. Bitenler:
 * Teknik hata günlüğü (`src/defteriki/gunluk.py`)
 * Test altyapısı (pytest + Hypothesis)
 * Tek komutluk kalite kontrolü (Ruff, Pyright strict, pytest)
-* `.gitignore` ve `.gitattributes`
+* `.gitignore` ve `.gitattributes`; kritik dışlama kuralları testle doğrulanır
+  (`tests/test_gitignore.py`)
 
 Henüz yok: veritabanı, veri modeli, MCP sunucusu, GUI.
 
