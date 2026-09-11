@@ -1,2 +1,5 @@
-def main() -> None:
-    print("Hello from defteriki!")
+"""DEFTERIKI kişisel finans kayıt sistemi.
+
+Giriş noktası ``defteriki.baslangic.main``; import sırasında hiçbir şey
+yapılmaz.
+"""

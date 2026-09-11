@@ -9,6 +9,8 @@ Aşama 2 (proje temeli) sürüyor. Bitenler:
 
 * uv ile paket iskeleti (`src/defteriki`)
 * Merkezi ayar yönetimi (`src/defteriki/ayarlar.py`)
+* Başlangıç akışı: `uv run defteriki` (`src/defteriki/baslangic.py`)
+* Teknik hata günlüğü (`src/defteriki/gunluk.py`)
 * Test altyapısı (pytest + Hypothesis)
 * Tek komutluk kalite kontrolü (Ruff, Pyright strict, pytest)
 * `.gitignore` ve `.gitattributes`
@@ -23,6 +25,44 @@ uv sync
 
 Python 3.13 ve uv gerekir. `uv sync` sanal ortamı ve geliştirme
 bağımlılıklarını (pytest, hypothesis, ruff, pyright) kurar.
+
+## Başlatma
+
+```bash
+uv run defteriki
+```
+
+Komut sırayla ayarları ortam değişkenlerinden yükler, seçilen ortamın
+dizinlerini (veritabanı dizini, `belgeler/`, `logs/`) açar, teknik günlüğü
+kurar ve başlangıç olayını günlüğe yazar. Başarılıysa tek satırlık bir mesaj
+(ortam, veri kökü, günlük dosyası) basar ve `0` ile çıkar. Henüz veritabanı
+oluşturmaz; finansal iş yapmaz.
+
+Herhangi bir adım başarısızsa (`DEFTERIKI_ORTAM` bilinmeyen değer, test
+ortamında veri kökü verilmemiş, dizin yerine dosya var, log dosyası
+açılamıyor...) anlaşılır bir hata stderr'e yazılır ve çıkış kodu `1` olur.
+Günlük kurulamadıysa başarılı başlangıç mesajı verilmez. Yollar
+uygulamanın hangi dizinden başlatıldığına bağlı değildir; modüller import
+edildiğinde dizin ya da dosya oluşturulmaz.
+
+## Teknik hata günlüğü
+
+Günlük yalnızca ayarlardaki log dizinine yazar: `<log dizini>/defteriki.log`
+(varsayılan `<veri kökü>/<ortam>/logs/defteriki.log`). Standart kütüphanenin
+`logging` modülü kullanılır; ek bağımlılık yoktur.
+
+Her satır `zaman | seviye | olay | mesaj` biçimindedir; olay türleri
+şimdilik `baslangic` ve `baslangic_hatasi`.
+
+Saklama sınırı: dosya 1.000.000 baytı aşınca döndürülür, en fazla 5 eski
+dosya (`defteriki.log.1` ... `.5`) tutulur; toplam en çok ~6 MB. Kurulum
+tekrar çağrılırsa önceki handler kapatılıp kaldırılır, aynı olay birden
+fazla yazılmaz.
+
+Gizlilik: belge içeriği, finansal kayıt içeriği, IBAN, kimlik bilgileri,
+sırlar ve ortam değişkenleri günlüğe yazılmaz. Hatalar yalnızca türüyle
+(`builtins.ValueError` gibi) kaydedilir; ham hata mesajı ve traceback dosyaya
+dökülmez. Kullanıcıya gösterilen hata metni stderr'e gider, dosyaya değil.
 
 ## Kalite kontrolü
 
@@ -51,8 +91,8 @@ başlatıldığı yolları değiştirmez.
 ```python
 from defteriki.ayarlar import ayarlari_yukle, dizinleri_hazirla
 
-ayarlar = ayarlari_yukle()   # ortam değişkenlerini okur, diske yazmaz
-dizinleri_hazirla(ayarlar)   # gerekli dizinleri açar, dosya oluşturmaz
+ayarlar = ayarlari_yukle()  # ortam değişkenlerini okur, diske yazmaz
+dizinleri_hazirla(ayarlar)  # gerekli dizinleri açar, dosya oluşturmaz
 ```
 
 Ortam değişkenleri (öncelik yukarıdan aşağıya):
@@ -82,6 +122,9 @@ Kurallar:
 
 ```
 src/defteriki/    uygulama paketi
+  ayarlar.py      merkezi ayarlar (ortam, yollar)
+  baslangic.py    uv run defteriki giriş noktası
+  gunluk.py       teknik hata günlüğü
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)
 ```

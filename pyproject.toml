@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-defteriki = "defteriki:main"
+defteriki = "defteriki.baslangic:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
