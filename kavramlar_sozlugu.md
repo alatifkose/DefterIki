@@ -28,3 +28,15 @@ DEFTERIKI'de aynı varlığı temsil etme ihtimali bulunan nesneleri tespit etme
 6. **Sonuçlandırma:** Kararlar, gerekçeler ve yapılan düzeltmeler kaydedilir ve uygulamada gösterilir. Şüphe çözüldüğünde ilgili engeller kaldırılır. Mükerrerlik giderilmişse AI işlemlerine korunan nesne üzerinden devam eder.
 
 _(Abdüllatif'in onayıyla eklendi, 2026-09-11.)_
+
+### Yazmak (write) ve kayıt etmek (save)
+
+Yazmak ve kayıt etmek farklı şeylerdir; DEFTERIKI'de ayrı tutulur. İşlemleri deftere yazmak kayıt etmek değildir; kayıt etmek ayrı bir adımdır ve belge kaydının tanımlanmasıyla olur. İleriki sürümlerde bir ajan yazıp bir ajan kontrol edebilir; yazan ajan kontrol ajanının onayıyla kaydeder (ihtimal, karar değil).
+
+_(Abdüllatif'in onayıyla eklendi, 2026-09-11.)_
+
+### İşlemin yarım kalması
+
+İşlemin yarım kalması, kaydedilememesidir. İşlemleri deftere yazmak kayıt etmek değildir; kayıt etmek ayrı bir şeydir (bkz. Yazmak ve kayıt etmek). Şüpheli işlemler bekletilirken belgedeki diğer işlemler deftere yazılır; şüphe giderildikten sonra belge kaydı tanımlanır. Belge kaydının geçersiz olduğuna karar verilirse (belge yanlışsa) o belgenin bütün işlemleri geri alınır, doğru belge işlenir.
+
+_(Abdüllatif'in onayıyla eklendi, 2026-09-11.)_
