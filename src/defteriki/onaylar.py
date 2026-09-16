@@ -3,7 +3,7 @@
 Bir iş kullanıcı onayı gerektirdiğinde çağrıyı bekletmek yerine kalıcı bir
 **onay talebi** açılır (``onay_talep`` tablosu) ve iş ``BEKLIYOR`` döner.
 Kullanıcı kararını ne zaman isterse verir; bu arada açık transaction ya da
-kilit tutulmaz. Karar, talebin hedefine (defter, nesne ...) uygulanır.
+kilit tutulmaz. Karar, talebin hedefine (nesne ...) uygulanır.
 
 İki kesin sınır:
 
@@ -16,8 +16,8 @@ kilit tutulmaz. Karar, talebin hedefine (defter, nesne ...) uygulanır.
   ve karar uygulanmaz.
 
 Karar etkileri türe göre ``KARAR_ETKILERI`` tablosunda; her tür kendi
-aşamasında eklenir (``DEFTER_TANIMLAMA`` burada, ``NESNE_ACILISI`` 4.4'te).
-Bu modül commit yapmaz; işlem sahibi çağırandır.
+aşamasında eklenir (``NESNE_ACILISI`` 4.4'te). Bu modül commit yapmaz; işlem
+sahibi çağırandır.
 """
 
 from __future__ import annotations
@@ -41,7 +41,6 @@ EYLEM_KARAR = "onay_karari"
 @dataclass(frozen=True, slots=True)
 class OnayTalebi:
     id: int
-    defter_id: int
     tur: sz.OnayTuru
     hedef_id: int
     hedef_surumu: int
@@ -64,6 +63,11 @@ type KararEtkisi = Callable[[Session, OnayTalebi, Karar, datetime], None]
 KARAR_ETKILERI: dict[sz.OnayTuru, KararEtkisi] = {}
 """Tür → etki. İlgili modül import edilince kendini kaydeder."""
 
+HEDEF_TABLOLARI: dict[sz.OnayTuru, sema.Table] = {
+    sz.OnayTuru.NESNE_ACILISI: sema.nesne,
+}
+"""Tür → hedefin tablosu; sürüm denetimi ``surum`` sütunundan okur."""
+
 
 def etki_kaydet(tur: sz.OnayTuru, etki: KararEtkisi) -> None:
     KARAR_ETKILERI[tur] = etki
@@ -72,7 +76,6 @@ def etki_kaydet(tur: sz.OnayTuru, etki: KararEtkisi) -> None:
 def talep_olustur(
     oturum: Session,
     *,
-    defter_id: int,
     tur: sz.OnayTuru,
     hedef_id: int,
     hedef_surumu: int,
@@ -86,7 +89,6 @@ def talep_olustur(
         oturum.execute(
             sema.onay_talep.insert()
             .values(
-                defter_id=defter_id,
                 tur=tur.value,
                 hedef_id=hedef_id,
                 hedef_surumu=hedef_surumu,
@@ -101,7 +103,6 @@ def talep_olustur(
     )
     denetim.olay_yaz(
         oturum,
-        defter_id=defter_id,
         aktor=aktor,
         eylem=EYLEM_TALEP_OLUSTUR,
         hedef=denetim.hedef_adi("onay_talep", talep_id),
@@ -110,33 +111,26 @@ def talep_olustur(
         gerekce=tur.value,
         sonraki_durum=sz.OnayDurumu.BEKLIYOR.value,
     )
-    return talep_getir(oturum, defter_id=defter_id, talep_id=talep_id)
+    return talep_getir(oturum, talep_id)
 
 
-def talep_getir(oturum: Session, *, defter_id: int, talep_id: int) -> OnayTalebi:
-    """Talebi döndürür; başka defterin talebi ya da yoksa ``DEFTER_UYUSMAZLIGI``."""
+def talep_getir(oturum: Session, talep_id: int) -> OnayTalebi:
+    """Talebi döndürür; yoksa ``HEDEF_BULUNAMADI``."""
     satir = oturum.execute(
-        select(sema.onay_talep).where(
-            sema.onay_talep.c.id == talep_id, sema.onay_talep.c.defter_id == defter_id
-        )
+        select(sema.onay_talep).where(sema.onay_talep.c.id == talep_id)
     ).one_or_none()
     if satir is None:
-        raise sz.DefterUyusmazligi(
-            "onay talebi bu defterde bulunamadı", alan="talep_id"
-        )
+        raise sz.HedefBulunamadi("onay talebi bulunamadı", alan="talep_id")
     return _talep(satir._mapping)  # pyright: ignore[reportPrivateUsage]
 
 
 def bekleyenleri_listele(
-    oturum: Session, *, defter_id: int, sayfalama: sz.Sayfalama = sz.Sayfalama()
+    oturum: Session, *, sayfalama: sz.Sayfalama = sz.Sayfalama()
 ) -> list[OnayTalebi]:
-    """Defterin ``BEKLIYOR`` talepleri, eskiden yeniye."""
+    """``BEKLIYOR`` talepler, eskiden yeniye."""
     satirlar = oturum.execute(
         select(sema.onay_talep)
-        .where(
-            sema.onay_talep.c.defter_id == defter_id,
-            sema.onay_talep.c.durum == sz.OnayDurumu.BEKLIYOR.value,
-        )
+        .where(sema.onay_talep.c.durum == sz.OnayDurumu.BEKLIYOR.value)
         .order_by(sema.onay_talep.c.id)
         .limit(sayfalama.sinir)
         .offset(sayfalama.baslangic)
@@ -147,7 +141,6 @@ def bekleyenleri_listele(
 def karar_uygula(
     oturum: Session,
     *,
-    defter_id: int,
     talep_id: int,
     gorulen_hedef_surumu: int,
     karar: Karar,
@@ -160,7 +153,7 @@ def karar_uygula(
     sürümü ve hedefin güncel sürümüyle aynı değilse ``HEDEF_SURUMU_DEGISTI``
     ve hiçbir şey yazılmaz. Sonuçlanmış talebe yeniden karar verilemez.
     """
-    talep = talep_getir(oturum, defter_id=defter_id, talep_id=talep_id)
+    talep = talep_getir(oturum, talep_id)
     if talep.durum is not sz.OnayDurumu.BEKLIYOR:
         raise sz.GirdiGecersiz(
             f"onay talebi zaten sonuçlanmış ({talep.durum.value})", alan="talep_id"
@@ -199,7 +192,6 @@ def karar_uygula(
     )
     denetim.olay_yaz(
         oturum,
-        defter_id=defter_id,
         aktor=aktor,
         eylem=EYLEM_KARAR,
         hedef=denetim.hedef_adi("onay_talep", talep.id),
@@ -208,13 +200,7 @@ def karar_uygula(
         onceki_durum=sz.OnayDurumu.BEKLIYOR.value,
         sonraki_durum=yeni_durum.value,
     )
-    return talep_getir(oturum, defter_id=defter_id, talep_id=talep.id)
-
-
-HEDEF_TABLOLARI: dict[sz.OnayTuru, sema.Table] = {
-    sz.OnayTuru.DEFTER_TANIMLAMA: sema.defter,
-    sz.OnayTuru.NESNE_ACILISI: sema.nesne,
-}
+    return talep_getir(oturum, talep.id)
 
 
 def _hedef_surumu(oturum: Session, talep: OnayTalebi) -> int:
@@ -223,14 +209,13 @@ def _hedef_surumu(oturum: Session, talep: OnayTalebi) -> int:
         select(tablo.c.surum).where(tablo.c.id == talep.hedef_id)
     ).scalar_one_or_none()
     if surum is None:
-        raise sz.DefterUyusmazligi("onay talebinin hedefi bulunamadı", alan="hedef_id")
+        raise sz.HedefBulunamadi("onay talebinin hedefi bulunamadı", alan="hedef_id")
     return int(surum)
 
 
 def _talep(satir: RowMapping) -> OnayTalebi:
     return OnayTalebi(
         id=int(satir["id"]),
-        defter_id=int(satir["defter_id"]),
         tur=sz.OnayTuru(satir["tur"]),
         hedef_id=int(satir["hedef_id"]),
         hedef_surumu=int(satir["hedef_surumu"]),

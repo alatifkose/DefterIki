@@ -1,4 +1,4 @@
-"""Şema ve migration testleri (Teslim 4.2).
+"""Şema ve migration testleri (Teslim 4.2; tek defter).
 
 Boş bir SQLite dosyasına Alembic ile kurulum; bütünlük denetimleri; metadata
 ile migration'ın ürettiği şema arasında fark olmaması; sürüm denetimi; şema
@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -34,7 +34,6 @@ DEFTERIKI_DEGISKENLERI = (
 )
 
 BEKLENEN_TABLOLAR = {
-    "defter",
     "nesne",
     "nesne_ozellik",
     "nesne_baglanti",
@@ -52,7 +51,7 @@ BEKLENEN_TABLOLAR = {
     "denetim_olay",
 }
 
-SIMDI = datetime(2026, 9, 16, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+SIMDI = datetime(2026, 9, 16, 12, 0)
 
 
 @pytest.fixture(autouse=True)
@@ -84,12 +83,25 @@ def _tablolar(db: vt.Veritabani) -> set[str]:
 # --- kurulum ve sürüm ----------------------------------------------------------------
 
 
-def test_bos_veritabanina_kurulum_on_alti_tablo(kurulu: vt.Veritabani) -> None:
+def test_bos_veritabanina_kurulum_on_bes_tablo(kurulu: vt.Veritabani) -> None:
     tablolar = _tablolar(kurulu)
 
     assert tablolar == BEKLENEN_TABLOLAR | {"alembic_version"}
     assert set(sema.TABLOLAR) == BEKLENEN_TABLOLAR
-    assert len(sema.TABLOLAR) == 16
+    assert len(sema.TABLOLAR) == 15
+    assert "defter" not in tablolar
+
+
+def test_hic_bir_tabloda_defter_kimligi_yok(kurulu: vt.Veritabani) -> None:
+    """Sözlük "Defter": DEFTERIKI tek bütünleşik defterdir."""
+    with kurulu.okuma_islemi() as oturum:
+        denetci = inspect(oturum.connection())
+        sutunlar = {
+            tablo: [s["name"] for s in denetci.get_columns(tablo)]
+            for tablo in BEKLENEN_TABLOLAR
+        }
+
+    assert all("defter_id" not in adlar for adlar in sutunlar.values())
 
 
 def test_yukseltme_surumu_dondurur_ve_denetim_gecer(veritabani: vt.Veritabani) -> None:
@@ -149,58 +161,26 @@ def test_geri_alma_butun_tablolari_kaldirir(kurulu: vt.Veritabani) -> None:
     assert sema.sema_surumu(kurulu) is None
 
 
-def test_yukseltme_sirasinda_hata_hicbir_tablo_birakmaz(
-    veritabani: vt.Veritabani, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Denetim yükseltmeden sonra çalışır; hatası yükseltmeyi geri almaz."""
-
-    def patlayan_denetim(db: vt.Veritabani) -> None:
-        raise RuntimeError("denetim patladı")
-
-    monkeypatch.setattr(sema, "butunlugu_denetle", patlayan_denetim)
-    with pytest.raises(RuntimeError, match="denetim patladı"):
-        sema.semayi_yukselt(veritabani)
-    # yükseltme commit edildi (denetim sonrasında patladı); tabloların hepsi var
-    assert _tablolar(veritabani) == BEKLENEN_TABLOLAR | {"alembic_version"}
-
-
 # --- kısıtlar veritabanı düzeyinde ------------------------------------------------
 
 
-def _defter_ac(db: vt.Veritabani, ad: str = "Ev") -> int:
-    with db.yazma_islemi() as oturum:
-        return int(
-            oturum.execute(
-                sema.defter.insert()
-                .values(ad=ad, durum="AKTIF", olusturma_zamani=SIMDI)
-                .returning(sema.defter.c.id)
-            ).scalar_one()
-        )
-
-
-def _nesne_ac(db: vt.Veritabani, defter_id: int, seviye: int = 0) -> int:
+def _nesne_ac(db: vt.Veritabani, seviye: int = 0) -> int:
     with db.yazma_islemi() as oturum:
         return int(
             oturum.execute(
                 sema.nesne.insert()
-                .values(
-                    defter_id=defter_id,
-                    seviye=seviye,
-                    durum="AKTIF",
-                    olusturma_zamani=SIMDI,
-                )
+                .values(seviye=seviye, durum="AKTIF", olusturma_zamani=SIMDI)
                 .returning(sema.nesne.c.id)
             ).scalar_one()
         )
 
 
-def _kayit_ekle(db: vt.Veritabani, defter_id: int, nesne_id: int) -> int:
+def _kayit_ekle(db: vt.Veritabani, nesne_id: int) -> int:
     with db.yazma_islemi() as oturum:
         return int(
             oturum.execute(
                 sema.kayit.insert()
                 .values(
-                    defter_id=defter_id,
                     asil_nesne_id=nesne_id,
                     islem_tarihi=date(2026, 9, 1),
                     durum="AKTIF",
@@ -212,39 +192,33 @@ def _kayit_ekle(db: vt.Veritabani, defter_id: int, nesne_id: int) -> int:
 
 
 def test_izinli_olmayan_durum_reddedilir(kurulu: vt.Veritabani) -> None:
-    with pytest.raises(IntegrityError, match="ck_defter_durum_izinli"):
+    with pytest.raises(IntegrityError, match="ck_nesne_durum_izinli"):
         with kurulu.yazma_islemi() as oturum:
             oturum.execute(
-                sema.defter.insert().values(
-                    ad="Ev", durum="ACIK", olusturma_zamani=SIMDI
+                sema.nesne.insert().values(
+                    seviye=0, durum="ONAY_BEKLIYOR", olusturma_zamani=SIMDI
                 )
             )
 
 
-def test_defterler_arasi_baglanti_imkansiz(kurulu: vt.Veritabani) -> None:
-    """Bileşik dış anahtar: başka defterin nesnesine kayıt bağlanamaz."""
-    defter_1 = _defter_ac(kurulu, "Bir")
-    defter_2 = _defter_ac(kurulu, "İki")
-    nesne_1 = _nesne_ac(kurulu, defter_1)
-
+def test_olmayan_nesneye_kayit_baglanamaz(kurulu: vt.Veritabani) -> None:
     with pytest.raises(IntegrityError, match="FOREIGN KEY"):
-        _kayit_ekle(kurulu, defter_2, nesne_1)
+        _kayit_ekle(kurulu, 999)
 
-    assert _kayit_ekle(kurulu, defter_1, nesne_1) >= 1  # aynı defterde sorunsuz
+    nesne_id = _nesne_ac(kurulu)
+    assert _kayit_ekle(kurulu, nesne_id) >= 1
 
 
 def test_negatif_tutar_ve_try_disi_para_birimi_reddedilir(
     kurulu: vt.Veritabani,
 ) -> None:
-    defter_id = _defter_ac(kurulu)
-    nesne_id = _nesne_ac(kurulu, defter_id)
-    kayit_id = _kayit_ekle(kurulu, defter_id, nesne_id)
+    nesne_id = _nesne_ac(kurulu)
+    kayit_id = _kayit_ekle(kurulu, nesne_id)
 
     def etki_ekle(tutar: int, para_birimi: str) -> None:
         with kurulu.yazma_islemi() as oturum:
             oturum.execute(
                 sema.etki.insert().values(
-                    defter_id=defter_id,
                     kayit_id=kayit_id,
                     nesne_id=nesne_id,
                     eksen="VARLIK",
@@ -264,38 +238,26 @@ def test_negatif_tutar_ve_try_disi_para_birimi_reddedilir(
 def test_nesne_kendine_baglanamaz_ve_bos_alan_adi_reddedilir(
     kurulu: vt.Veritabani,
 ) -> None:
-    defter_id = _defter_ac(kurulu)
-    nesne_id = _nesne_ac(kurulu, defter_id)
+    nesne_id = _nesne_ac(kurulu)
 
     with pytest.raises(IntegrityError, match="ck_nesne_baglanti_kendine_bagli_degil"):
         with kurulu.yazma_islemi() as oturum:
             oturum.execute(
-                sema.nesne_baglanti.insert().values(
-                    defter_id=defter_id, alt_id=nesne_id, ust_id=nesne_id
-                )
+                sema.nesne_baglanti.insert().values(alt_id=nesne_id, ust_id=nesne_id)
             )
     with pytest.raises(IntegrityError, match="ck_nesne_ozellik_alan_adi_bos_degil"):
         with kurulu.yazma_islemi() as oturum:
             oturum.execute(
                 sema.nesne_ozellik.insert().values(
-                    defter_id=defter_id,
-                    nesne_id=nesne_id,
-                    alan_adi="",
-                    deger_turu="METIN",
-                    deger="x",
+                    nesne_id=nesne_id, alan_adi="", deger_turu="METIN", deger="x"
                 )
             )
 
 
 def test_ayni_nesnede_ayni_alan_adi_iki_kez_reddedilir(kurulu: vt.Veritabani) -> None:
-    defter_id = _defter_ac(kurulu)
-    nesne_id = _nesne_ac(kurulu, defter_id)
+    nesne_id = _nesne_ac(kurulu)
     ekle = sema.nesne_ozellik.insert().values(
-        defter_id=defter_id,
-        nesne_id=nesne_id,
-        alan_adi="iban",
-        deger_turu="METIN",
-        deger="TR00",
+        nesne_id=nesne_id, alan_adi="iban", deger_turu="METIN", deger="TR00"
     )
 
     with kurulu.yazma_islemi() as oturum:
@@ -306,13 +268,42 @@ def test_ayni_nesnede_ayni_alan_adi_iki_kez_reddedilir(kurulu: vt.Veritabani) ->
             oturum.execute(ekle)
 
 
+def test_ayni_dosya_ikinci_belge_olamaz(kurulu: vt.Veritabani) -> None:
+    """Tek defter: aynı arşiv dosyası yalnız bir belgeye bağlanır."""
+    with kurulu.yazma_islemi() as oturum:
+        dosya_id = int(
+            oturum.execute(
+                sema.arsiv_dosya.insert()
+                .values(
+                    sha256="a" * 64,
+                    boyut=1,
+                    mime="application/pdf",
+                    goreli_yol="2026/a.pdf",
+                    olusturma_zamani=SIMDI,
+                )
+                .returning(sema.arsiv_dosya.c.id)
+            ).scalar_one()
+        )
+    belge_ekle = sema.belge.insert().values(
+        dosya_id=dosya_id, durum="ARSIVLENDI", olusturma_zamani=SIMDI
+    )
+
+    with kurulu.yazma_islemi() as oturum:
+        oturum.execute(belge_ekle)
+    with pytest.raises(
+        IntegrityError, match="UNIQUE constraint failed: belge.dosya_id"
+    ):
+        with kurulu.yazma_islemi() as oturum:
+            oturum.execute(belge_ekle)
+
+
 def test_kimlikler_yeniden_kullanilmaz(kurulu: vt.Veritabani) -> None:
     """AUTOINCREMENT: silinen son kimlik bir sonraki kayda verilmez."""
-    ilk = _defter_ac(kurulu, "Bir")
+    ilk = _nesne_ac(kurulu)
     with kurulu.yazma_islemi() as oturum:
-        oturum.execute(text("DELETE FROM defter WHERE id = :id"), {"id": ilk})
+        oturum.execute(sema.nesne.delete().where(sema.nesne.c.id == ilk))
 
-    ikinci = _defter_ac(kurulu, "İki")
+    ikinci = _nesne_ac(kurulu)
 
     assert ikinci == ilk + 1
 

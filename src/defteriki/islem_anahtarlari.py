@@ -1,9 +1,7 @@
 """İşlem anahtarı: aynı isteğin ikinci kez uygulanmasını önler (K08).
 
-Her yazma işlevi bir ``islem_anahtari`` alır. Anahtar kapsamıyla birlikte
-benzersizdir: ``(kapsam_turu, kapsam_id, arac_adi, anahtar)``. Kapsam
-``DEFTER`` (kapsam_id = defter kimliği) ya da ``SISTEM`` (defter henüz yokken,
-kapsam_id 0). Aynı anahtar ikinci kez gelirse:
+Her yazma işlevi bir ``islem_anahtari`` alır. Anahtar araç adıyla birlikte
+benzersizdir: ``(arac_adi, anahtar)``. Aynı anahtar ikinci kez gelirse:
 
 * istek içeriği aynıysa saklı sonuç döndürülür, hiçbir şey yeniden yazılmaz;
 * içerik farklıysa ``ANAHTAR_ICERIK_CAKISMASI`` verilir (Tam Plan 11.2).
@@ -20,7 +18,6 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -30,17 +27,8 @@ from sqlalchemy.orm import Session
 from defteriki import sema
 from defteriki import sozlesmeler as sz
 
-SISTEM_KAPSAM_ID = 0
-"""``SISTEM`` kapsamında kapsam_id her zaman 0'dır."""
-
 type IstekIcerigi = Mapping[str, object]
 type Sonuc = dict[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class AnahtarKaydi:
-    id: int
-    sonuc: Sonuc | None
 
 
 def istek_ozeti(icerik: IstekIcerigi) -> str:
@@ -62,8 +50,6 @@ def anahtari_dogrula(anahtar: str) -> str:
 def anahtarla_calistir(
     oturum: Session,
     *,
-    kapsam_turu: sz.IslemAnahtariKapsami,
-    kapsam_id: int,
     arac_adi: str,
     anahtar: str,
     icerik: IstekIcerigi,
@@ -86,8 +72,6 @@ def anahtarla_calistir(
             sema.islem_anahtari.c.istek_ozeti,
             sema.islem_anahtari.c.sonuc,
         ).where(
-            sema.islem_anahtari.c.kapsam_turu == kapsam_turu.value,
-            sema.islem_anahtari.c.kapsam_id == kapsam_id,
             sema.islem_anahtari.c.arac_adi == arac_adi,
             sema.islem_anahtari.c.anahtar == anahtar,
         )
@@ -106,8 +90,6 @@ def anahtarla_calistir(
     kayit_id = oturum.execute(
         sema.islem_anahtari.insert()
         .values(
-            kapsam_turu=kapsam_turu.value,
-            kapsam_id=kapsam_id,
             arac_adi=arac_adi,
             anahtar=anahtar,
             istek_ozeti=ozet,

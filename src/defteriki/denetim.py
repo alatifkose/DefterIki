@@ -18,7 +18,6 @@ from defteriki import sozlesmeler as sz
 def olay_yaz(
     oturum: Session,
     *,
-    defter_id: int,
     aktor: sz.DenetimAktoru,
     eylem: str,
     hedef: str,
@@ -33,7 +32,6 @@ def olay_yaz(
         oturum.execute(
             sema.denetim_olay.insert()
             .values(
-                defter_id=defter_id,
                 islem_id=islem_id,
                 aktor=aktor.value,
                 eylem=eylem,

@@ -10,14 +10,16 @@ cevap vermez, yalnız "ne" sorusuna.
 * **Yön** ARTTIR / AZALT, **eksen** VARLIK / BORC / GIDER, **para birimi**
   yalnız TRY (C09; alan şemada vardır, TRY dışı değer açık hata).
 * **Durumlar** (C08): belge, satır ve nesne durum adları tek yerde. Tam
-  Plan'ın açık bıraktığı listeler (defter, kayıt, okuma, kaynak rolü ve durumu,
-  onay türü ve durumu, değer türü, işlem anahtarı kapsamı, denetim aktörü)
+  Plan'ın açık bıraktığı listeler (kayıt, okuma, kaynak rolü ve durumu,
+  onay türü ve durumu, değer türü, denetim aktörü)
   Teslim 4.2'de Abdüllatif'in onayıyla sabitlendi.
 * **Hatalar**: Tam Plan bölüm 11.2'deki kodlarla bir sınıf ailesi. Her
   hatanın kodu, güvenli açıklaması, tekrar denenebilirliği ve isteğe bağlı
   alan/konum bilgisi vardır. Yığın izi, dosya içeriği ya da ham yük mesaja
   girmez. ``GIRDI_GECERSIZ`` 11.2'de yok; kimlik ve sayfalama gibi genel
-  girdi hataları için teknik kod olarak eklendi (bkz. README).
+  girdi hataları için teknik kod olarak eklendi (bkz. README). Ayrı defter
+  kararı iptal edildiği için (sözlük: Defter) ``DEFTER_UYUSMAZLIGI`` yerine
+  ``HEDEF_BULUNAMADI`` kullanılır.
 * **Sayfalama**: sunucu tarafı; varsayılan 100, en çok 500 satır.
 
 Modül import edildiğinde diske dokunulmaz.
@@ -92,14 +94,8 @@ class NesneDurumu(StrEnum):
 
 
 # Aşağıdaki listeler Tam Plan'da açık bırakılmıştı; 2026-09-16'da Claude önerdi,
-# Abdüllatif "öneriler tamam" dedi (Teslim 4.2).
-
-
-class DefterDurumu(StrEnum):
-    ONAY_BEKLIYOR = "ONAY_BEKLIYOR"
-    """Tanımlandı, onay uygulanmadı; yazma kabul etmez (C12)."""
-    AKTIF = "AKTIF"
-    PASIF = "PASIF"
+# Abdüllatif "öneriler tamam" dedi (Teslim 4.2). Aynı gün ayrı defter kararı iptal
+# edildi (sözlük: Defter); defter durumu ve işlem anahtarı kapsamı kaldırıldı.
 
 
 class KayitDurumu(StrEnum):
@@ -129,7 +125,6 @@ class KaynakDurumu(StrEnum):
 class OnayTuru(StrEnum):
     """Onay talebi türleri; diğerleri (ayrı tutma, pasifleştirme) kendi aşamalarında."""
 
-    DEFTER_TANIMLAMA = "DEFTER_TANIMLAMA"
     NESNE_ACILISI = "NESNE_ACILISI"
 
 
@@ -148,12 +143,6 @@ class DegerTuru(StrEnum):
     TARIH = "TARIH"
     MANTIKSAL = "MANTIKSAL"
     JSON = "JSON"
-
-
-class IslemAnahtariKapsami(StrEnum):
-    SISTEM = "SISTEM"
-    """Defter henüz yokken (ilk defter) kullanılan kapsam; kapsam_id 0."""
-    DEFTER = "DEFTER"
 
 
 class DenetimAktoru(StrEnum):
@@ -210,8 +199,10 @@ class ArsivEksik(DefterikiHatasi):
     kod = "ARSIV_EKSIK"
 
 
-class DefterUyusmazligi(DefterikiHatasi):
-    kod = "DEFTER_UYUSMAZLIGI"
+class HedefBulunamadi(DefterikiHatasi):
+    """Verilen kimlikte kayıt yok; 11.2'deki DEFTER_UYUSMAZLIGI'nın tek-defter hâli."""
+
+    kod = "HEDEF_BULUNAMADI"
 
 
 class SeviyeCakismasi(DefterikiHatasi):
@@ -265,7 +256,7 @@ HATA_KODLARI: tuple[type[DefterikiHatasi], ...] = (
     GirdiGecersiz,
     BelgeYok,
     ArsivEksik,
-    DefterUyusmazligi,
+    HedefBulunamadi,
     SeviyeCakismasi,
     NesneEngelli,
     YeniNesneEngeli,

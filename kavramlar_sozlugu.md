@@ -8,6 +8,12 @@ Bu sözlük, DEFTERIKI projesinde geçen kavramların tek ve ortak tanımını t
 
 ## Kavramlar
 
+### Defter
+
+DEFTERIKI tek ve bütünleşik bir defterdir: bütün kurumlar, bankalar, hesaplar, belgeler ve hareketler aynı defterin içindedir. Birbirinden ayrı tutulan "defterler" yoktur; farklı kişi veya amaçlara ait paralar (örneğin bir yakının parası) ayrı defterle değil, nesnelerin adı ve özellikleriyle ayrılır. Bu yüzden veri modelinde defter tablosu ve defter kimliği bulunmaz. Tam Plan'daki C01 kararı (ayrı defterler, her kayıtta defter kimliği) Abdüllatif'in kararıyla iptal edilmiştir.
+
+_(Abdüllatif'in kararıyla eklendi, 2026-09-16.)_
+
 ### Nesne
 
 Dış dünyadaki bir varlığın yapılandırılarak DEFTERIKI'ye kaydedilmesiyle nesne olur. Yapılandırmaya uğramayan şeyler nesne değildir; belgenin kendisi (PDF, fotoğraf) nesne değildir. Finansal hareketler nesne değildir; bire bir işlenir ve nesnelere bağlı, kendi işlem kurallarıyla tutulan kayıtlardır.

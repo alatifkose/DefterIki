@@ -53,10 +53,10 @@ def test_kimlik_pozitif_tam_sayi_kabul(deger: int) -> None:
 @pytest.mark.parametrize("deger", [0, -1, 1.0, True, "1", None])
 def test_kimlik_gecersiz_degerler_reddedilir(deger: object) -> None:
     with pytest.raises(sz.GirdiGecersiz) as bilgi:
-        sz.kimlik_dogrula(deger, alan="defter_id")
+        sz.kimlik_dogrula(deger, alan="nesne_id")
 
     assert bilgi.value.kod == "GIRDI_GECERSIZ"
-    assert bilgi.value.alan == "defter_id"
+    assert bilgi.value.alan == "nesne_id"
 
 
 # --- para birimi (C09) ---------------------------------------------------------
@@ -115,14 +115,14 @@ def test_durum_sabitleri_metin_gibi_davranir() -> None:
 # --- hata ailesi (Tam Plan 11.2) ----------------------------------------------
 
 
-def test_hata_kodlari_benzersiz_ve_11_2_ile_ortusur() -> None:
+def test_hata_kodlari_benzersiz_ve_11_2_ile_ortusur_tek_defter() -> None:
     kodlar = [sinif.kod for sinif in sz.HATA_KODLARI]
 
     assert len(kodlar) == len(set(kodlar))
     assert set(kodlar) >= {
         "BELGE_YOK",
         "ARSIV_EKSIK",
-        "DEFTER_UYUSMAZLIGI",
+        "HEDEF_BULUNAMADI",
         "SEVIYE_CAKISMASI",
         "NESNE_ENGELLI",
         "YENI_NESNE_ENGELI",
