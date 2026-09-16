@@ -8,7 +8,9 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
 (veritabanı çekirdeği) sürüyor: Teslim 4.1, 4.2 ve 4.3 bitti, 4.4 (nesne)
-sırada. Bitenler:
+sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
+defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
+4.3 buna göre yeniden kuruldu. Bitenler:
 
 * uv ile paket iskeleti (`src/defteriki`)
 * Merkezi ayar yönetimi (`src/defteriki/ayarlar.py`)
@@ -25,12 +27,11 @@ sırada. Bitenler:
   durum adları, hata ailesi, sayfalama (`src/defteriki/sozlesmeler.py`)
 * Veritabanı bağlantısı ve işlem sınırları: WAL, `BEGIN IMMEDIATE`, salt
   okunur okuma, geri alma garantisi (`src/defteriki/veritabani.py`)
-* Şema ve ilk migration: on altı tablo, isimli kısıtlar, bileşik dış
-  anahtarlar, Alembic ile sürüm denetimi (`src/defteriki/sema.py`,
-  `migrations/`)
-* Defter ve onay talebi: defter `ONAY_BEKLIYOR` doğar, ekrandan onaylanınca
-  `AKTIF`; işlem anahtarı koruması, sürüm denetimli karar, denetim olayı
-  (`defterler.py`, `onaylar.py`, `islem_anahtarlari.py`, `denetim.py`)
+* Şema ve ilk migration: on beş tablo, isimli kısıtlar, Alembic ile sürüm
+  denetimi (`src/defteriki/sema.py`, `migrations/`)
+* Onay talebi, işlem anahtarı ve denetim olayı: kalıcı `BEKLIYOR` talep,
+  yalnız ekrana açık sürüm denetimli karar, aynı anahtar aynı sonuç
+  (`onaylar.py`, `islem_anahtarlari.py`, `denetim.py`)
 
 Henüz yok: nesne/belge/kayıt işlevleri (4.4–4.6), GUI, ürün verisi yazan
 MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
@@ -168,16 +169,17 @@ Ortak sözleşmeler `src/defteriki/sozlesmeler.py`'de; ürün mantığı içerme
 
 ### Şema ve migration
 
-On altı tablo `src/defteriki/sema.py`'de SQLAlchemy Core `Table` nesneleriyle
-tanımlıdır (Tam Plan bölüm 5; Yürütme Planı 4.2 listesi). Veritabanında
-Alembic migration'larıyla kurulur: `migrations/versions/0001_ilk_sema.py`
-`METADATA`'dan autogenerate ile üretilip donduruldu; şema değişimi yalnız yeni
-migration ile yapılır, `create_all` kullanılmaz. Metadata ile veritabanındaki
-şema arasında fark olmaması testle doğrulanır (`compare_metadata == []`).
+On beş tablo `src/defteriki/sema.py`'de SQLAlchemy Core `Table` nesneleriyle
+tanımlıdır (Tam Plan bölüm 5; Yürütme Planı 4.2 listesi; sözlük "Defter"
+kararıyla defter tablosu yok). Veritabanında Alembic migration'larıyla
+kurulur: `migrations/versions/0001_ilk_sema.py` `METADATA`'dan autogenerate
+ile üretilip donduruldu; şema değişimi yalnız yeni migration ile yapılır,
+`create_all` kullanılmaz. Metadata ile veritabanındaki şema arasında fark
+olmaması testle doğrulanır (`compare_metadata == []`).
 
 | Grup | Tablolar |
 |---|---|
-| Defter ve nesne | `defter`, `nesne`, `nesne_ozellik`, `nesne_baglanti`, `nesne_sart`, `nesne_kaynak` |
+| Nesne | `nesne`, `nesne_ozellik`, `nesne_baglanti`, `nesne_sart`, `nesne_kaynak` |
 | Belge | `arsiv_dosya`, `belge`, `okuma`, `okuma_satir` |
 | Para | `kayit`, `kayit_kaynak`, `etki` |
 | İşletim | `onay_talep`, `islem_anahtari`, `denetim_olay` |
@@ -185,24 +187,21 @@ migration ile yapılır, `create_all` kullanılmaz. Metadata ile veritabanındak
 Kurallar:
 
 * Kimlikler `INTEGER PRIMARY KEY AUTOINCREMENT`; silinen kimlik yeniden
-  verilmez.
-* Her iş tablosu `defter_id` taşır; alt tablolar üst tabloya bileşik dış
-  anahtarla `(defter_id, hedef_id) → hedef(defter_id, id)` bağlanır, bunun
-  için üst tablolarda `UNIQUE(defter_id, id)` vardır. Başka defterin
-  nesnesine kayıt bağlamak veritabanı düzeyinde imkânsızdır (testli).
-  İstisnalar: `arsiv_dosya` defterden bağımsız (aynı dosya birden fazla
-  defterde belge olabilir); `islem_anahtari` kapsamı `kapsam_turu`
-  (`SISTEM`/`DEFTER`) ve `kapsam_id` ile taşır.
+  verilmez (testli).
+* **Tek defter.** Tablolarda defter kimliği yok; dış anahtarlar doğrudan
+  hedef kimliğe bağlanır (`nesne_id → nesne.id` gibi). Aynı arşiv dosyası
+  yalnız bir belgeye bağlanır (`UNIQUE(belge.dosya_id)`). İşlem anahtarı
+  `(arac_adi, anahtar)` ile benzersizdir.
 * Bütün kısıtlar isimli (`pk_`, `fk_`, `uq_`, `ck_`, `ix_` kalıbı). Durum,
   yön, eksen, para birimi, tür sütunları izinli değerlerle CHECK'li;
   `tutar_kurus >= 0`, `seviye >= 0`, `alt_id <> ust_id`, boş alan adı ve
   boş anahtar reddedilir, `sha256` 64 karakter.
 * Zaman damgaları UTC `DateTime`; kaynak tarihleri (`islem_tarihi`,
   `valor_tarihi`) ayrı `Date`.
-* İndeksler Tam Plan 5.3'teki gibi: nesne (defter, seviye, id); bağlantı iki
-  yönlü; özellik (defter, alan adı, değer türü, eşleşme değeri); kayıt
-  (defter, asıl nesne, işlem tarihi, id); etki (defter, nesne, eksen, para
-  birimi, kayıt); kaynak iki yönlü; onay (defter, durum, id). Ölçülmeden ek
+* İndeksler Tam Plan 5.3'ün defter-sız hâli: nesne (seviye, id); bağlantı
+  üst yönü (alt yönü UNIQUE ile kapalı); özellik (alan adı, değer türü,
+  eşleşme değeri); kayıt (asıl nesne, işlem tarihi, id); etki (nesne, eksen,
+  para birimi, kayıt); kaynak iki yönlü; onay (durum, id). Ölçülmeden ek
   indeks eklenmez.
 * Aşama 8 alanları (`kayit.olay_id`, `islem_turu`, `yerine_gecen_id`,
   `etki.borc_id`) ve Aşama 7'nin mükerrerlik tabloları bu şemada yoktur;
@@ -211,12 +210,14 @@ Kurallar:
 
 **Durum listeleri (karar, 2026-09-16).** Tam Plan belge, satır ve nesne
 durumlarını (C08) vermişti; şu listeler açıktı, Claude önerdi, Abdüllatif
-onayladı: defter `ONAY_BEKLIYOR`/`AKTIF`/`PASIF`; kayıt `AKTIF`/`GECERSIZ`;
-okuma `ACIK`/`TAMAMLANDI`/`IPTAL`; kaynak rolü `ASIL`/`DESTEK`, kaynak durumu
-`AKTIF`/`KALDIRILDI`; onay türü `DEFTER_TANIMLAMA`/`NESNE_ACILISI`, onay
-durumu `BEKLIYOR`/`ONAYLANDI`/`REDDEDILDI`. Ayrıca plandan: değer türü
+onayladı: kayıt `AKTIF`/`GECERSIZ`; okuma `ACIK`/`TAMAMLANDI`/`IPTAL`;
+kaynak rolü `ASIL`/`DESTEK`, kaynak durumu `AKTIF`/`KALDIRILDI`; onay türü
+`NESNE_ACILISI` (diğerleri kendi aşamalarında), onay durumu
+`BEKLIYOR`/`ONAYLANDI`/`REDDEDILDI`. Ayrıca plandan: değer türü
 `METIN`/`TAMSAYI`/`ONDALIK`/`TARIH`/`MANTIKSAL`/`JSON`, denetim aktörü
 `COWORK`/`KULLANICI`/`UYGULAMA`. Hepsi `sozlesmeler.py`'de `StrEnum`.
+Tek defter kararıyla 11.2'deki `DEFTER_UYUSMAZLIGI` kodu `HEDEF_BULUNAMADI`
+oldu (verilen kimlikte kayıt yok).
 
 Sürüm denetimi (`sema.py`): `BEKLENEN_SEMA_SURUMU = "0001"`.
 `semayi_denetle` veritabanındaki Alembic sürümünü okur; kurulmamış ya da
@@ -226,14 +227,14 @@ migration'ları tek yazma işleminde (`BEGIN IMMEDIATE`) uygular, ardından
 `uv run alembic upgrade head` (yol `DEFTERIKI_*` ayarlarından;
 `alembic.ini`'de URL yok, yollar `%(here)s` ile ini dosyasına göre).
 
-Test (`tests/test_sema.py`): boş veritabanına kurulum on altı tablo;
-`foreign_key_check`/`integrity_check` temiz; metadata ile migration
-arasında fark yok; sürüm denetimi (kurulmamış, farklı sürüm); tekrar
-yükseltme; geri alma bütün tabloları kaldırır; kısıtlar veritabanında
-çalışır (izinsiz durum, defterler arası bağlantı, negatif tutar, TRY dışı
-para birimi, kendine bağlantı, boş alan adı, aynı alan adı iki kez,
-kimlik yeniden kullanılmaz); komut satırından yükseltme başka çalışma
-dizininden ayarlardaki yolu bulur.
+Test (`tests/test_sema.py`): boş veritabanına kurulum on beş tablo, hiçbir
+tabloda defter kimliği yok; `foreign_key_check`/`integrity_check` temiz;
+metadata ile migration arasında fark yok; sürüm denetimi (kurulmamış, farklı
+sürüm); tekrar yükseltme; geri alma bütün tabloları kaldırır; kısıtlar
+veritabanında çalışır (izinsiz durum, olmayan nesneye kayıt, negatif tutar,
+TRY dışı para birimi, kendine bağlantı, boş alan adı, aynı alan adı iki kez,
+aynı dosya iki belge olamaz, kimlik yeniden kullanılmaz); komut satırından
+yükseltme başka çalışma dizininden ayarlardaki yolu bulur.
 
 Test (`tests/test_veritabani.py`, `tests/test_sozlesmeler.py`): PRAGMA
 değerleri; iki ayrı süreç aynı ayarlarla aynı dosyayı çözer ve birbirinin
@@ -242,55 +243,54 @@ tutulurken `BEGIN IMMEDIATE` salt SELECT'i bile bekletir ve süre dolunca
 `VERITABANI_MESGUL` verir; yazar okumayı engellemez; import dosya yaratmaz;
 Hypothesis ile `KurusTutar` sınırları (negatif, float, bool reddi).
 
-## Defter ve onay talebi
+## Onay talebi, işlem anahtarı, denetim olayı
 
 Teslim 4.3. Ekran ve MCP yok; işlev ve test düzeyi. Bütün işlevler bir
 `Session` alır ve **commit yapmaz**: işlem sahibi çağırandır
 (`Veritabani.yazma_islemi`). Bir işlev ortada düşerse aynı işlemdeki her şey
-(defter, talep, anahtar kaydı, denetim olayı) geri alınır; testli.
+(talep, anahtar kaydı, denetim olayı, hedef değişikliği) geri alınır; testli.
 
-**Defter** (`src/defteriki/defterler.py`). `defter_tanimla(ad,
-islem_anahtari, aktor)` defteri `ONAY_BEKLIYOR` durumunda açar ve
-`DEFTER_TANIMLAMA` onay talebi üretir (C12). Defter onaylanmadan yazma kabul
-etmez: `aktif_defteri_getir` `AKTIF` dışı durumda `DEFTER_UYUSMAZLIGI` verir.
-İlk defter açılırken henüz defter yok, bu yüzden işlem anahtarı `SISTEM`
-kapsamlıdır (`kapsam_id` 0). Kapsam denetimi `defterde_oldugunu_dogrula`:
-başka defterin kaydına erişim `DEFTER_UYUSMAZLIGI`. `defter_getir`,
-`defter_listele` (sayfalı).
+**Tek defter kararının etkisi.** 4.3'ün ilk hâli "defter tanımla + onay"
+işlevini içeriyordu; Abdüllatif ayrı defter istemediğini söyleyince
+(sözlük: Defter) `defterler.py` ve testleri kaldırıldı, işlem anahtarının
+`SISTEM`/`DEFTER` kapsamı düştü, onay ve denetim işlevleri defter
+parametresinden arındı. İlk onay türü `NESNE_ACILISI`, etkisi 4.4'te.
 
 **İşlem anahtarı** (`src/defteriki/islem_anahtarlari.py`, K08). Her yazma
-işlevi anahtar alır; `(kapsam_turu, kapsam_id, arac_adi, anahtar)` benzersiz.
-Aynı anahtar aynı içerikle gelirse saklı sonuç döner, hiçbir şey yeniden
-yazılmaz (`zaten_vardi=True`); farklı içerik `ANAHTAR_ICERIK_CAKISMASI`.
-İçerik karşılaştırması isteğin kanonik JSON'unun SHA-256 özetiyle yapılır,
-ham istek saklanmaz. Anahtar kaydı, iş sonucu ve denetim olayı aynı işlemde.
+işlevi anahtar alır; `(arac_adi, anahtar)` benzersiz. Aynı anahtar aynı
+içerikle gelirse saklı sonuç döner, hiçbir şey yeniden yazılmaz
+(`zaten_vardi=True`); farklı içerik `ANAHTAR_ICERIK_CAKISMASI`. İçerik
+karşılaştırması isteğin kanonik JSON'unun SHA-256 özetiyle yapılır, ham istek
+saklanmaz. Anahtar kaydı, iş sonucu ve denetim olayı aynı işlemde; iş ortada
+düşerse anahtar kaydı da gider.
 
-**Onay talebi** (`src/defteriki/onaylar.py`). `talep_olustur` kalıcı
+**Onay talebi** (`src/defteriki/onaylar.py`, C12). `talep_olustur` kalıcı
 `BEKLIYOR` talep açar; kullanıcı beklerken açık transaction ya da kilit
 tutulmaz (testli: talep yazıldıktan hemen sonra başka bağlantı yazma kilidi
 alabilir). `bekleyenleri_listele` yalnız `BEKLIYOR` olanları verir.
-`karar_uygula(defter_id, talep_id, gorulen_hedef_surumu, karar)` **yalnız
-ekrana açılır**; MCP kapısına "kullanıcı onayladı" parametresi hiç
-sunulmaz. Sürüm denetimi: talebin taşıdığı sürüm, kullanıcının ekranda
-gördüğü sürüm ve hedefin güncel sürümü üçü aynı değilse
-`HEDEF_SURUMU_DEGISTI`, hiçbir şey yazılmaz. Sonuçlanmış talebe yeniden karar
-verilemez. Karar etkisi türe göre kayıtlıdır (`KARAR_ETKILERI`):
-`DEFTER_TANIMLAMA` onay → defter `AKTIF`, red → `PASIF`; iki hâlde de
-hedefin sürümü bir artar. `NESNE_ACILISI` etkisi 4.4'te eklenir.
+`karar_uygula(talep_id, gorulen_hedef_surumu, karar)` **yalnız ekrana
+açılır**; MCP kapısına "kullanıcı onayladı" parametresi hiç sunulmaz. Sürüm
+denetimi: talebin taşıdığı sürüm, kullanıcının ekranda gördüğü sürüm ve
+hedefin güncel sürümü üçü aynı değilse `HEDEF_SURUMU_DEGISTI`, hiçbir şey
+yazılmaz. Sonuçlanmış talebe yeniden karar verilemez; hedefi silinmiş talep
+`HEDEF_BULUNAMADI`. Karar etkisi türe göre kayıtlıdır (`KARAR_ETKILERI`);
+`NESNE_ACILISI` etkisini 4.4'te `nesneler.py` kaydeder, testler kendi
+etkisini kaydederek mekanizmayı sınar.
 
 **Denetim olayı** (`src/defteriki/denetim.py`). Her yazma aynı işlemde
 `denetim_olay` satırı bırakır: aktör (`COWORK`/`KULLANICI`/`UYGULAMA`),
 eylem, hedef (`tablo:kimlik`), önceki/sonraki durum, işlem anahtarı kaydı.
 Kişisel veri taşımaz.
 
-Test (`tests/test_defterler.py`, `tests/test_onaylar.py`): ilk defter
-`SISTEM` kapsamlı anahtarla; aynı anahtar aynı içerik yeni defter açmaz;
-farklı içerik çakışır ve yazmaz; boş ad/anahtar reddi; hata her şeyi geri
-alır; kilit tutulmaz; onay uygulanmadan defter `AKTIF` olmaz; onay → `AKTIF`
-ve sürüm 2, red → `PASIF`; eski sürümle karar reddedilir ve yazılmaz; hedef
-arkadan değişirse talep eskir; sonuçlanmış talebe yeniden karar yok; başka
-defterin talebine karar yok; bekleyenler ve sayfalama; karar hatası geri
-alınır.
+Test (`tests/test_islem_anahtarlari.py`, `tests/test_onaylar.py`): yeni
+anahtar işlevi çalıştırır ve sonucu saklar; aynı anahtar aynı içerik saklı
+sonucu verir, işlev çalışmaz; farklı içerik çakışır; aynı anahtar farklı araç
+ayrı sayılır; boş anahtar reddi; işlev hatası anahtar kaydını geri alır;
+talep `BEKLIYOR` doğar ve denetim olayı yazar; kilit tutulmaz; onay hedefi
+`AKTIF` yapar ve sürümü artırır, red `PASIF`; eski sürümle karar reddedilir
+ve yazılmaz; hedef arkadan değişirse talep eskir; sonuçlanmış talebe yeniden
+karar yok; hedefi silinmiş talep; bekleyenler ve sayfalama; karar hatası
+her şeyi geri alır.
 
 ## Teknik hata günlüğü
 
@@ -382,17 +382,16 @@ src/defteriki/    uygulama paketi
   mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu ve araçları
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
-  sema.py         on altı tablo (METADATA), şema sürümü denetimi ve yükseltme
+  sema.py         on beş tablo (METADATA), şema sürümü denetimi ve yükseltme
   islem_anahtarlari.py  işlem anahtarı koruması (aynı anahtar aynı sonuç, K08)
   denetim.py      denetim olayı yazımı
   onaylar.py      onay talebi: oluştur, listele, karar uygula (yalnız ekran)
-  defterler.py    defter tanımla/getir/listele; kapsam denetimi
 migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)
 .pre-commit-config.yaml  commit öncesi kanca; kontrol.py'yi çalıştırır
-kavramlar_sozlugu.md   ortak kavram tanımları; ekleme ve değişiklik yalnız Abdüllatif'in onayıyla
+kavramlar_sozlugu.md   ortak kavram tanımları (Defter, Nesne, Mükerrerlik, Yazmak/kayıt etmek ...); değişiklik yalnız Abdüllatif'in onayıyla
 ```
 
 ## Teknoloji
