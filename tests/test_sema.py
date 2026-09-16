@@ -196,7 +196,7 @@ def test_izinli_olmayan_durum_reddedilir(kurulu: vt.Veritabani) -> None:
         with kurulu.yazma_islemi() as oturum:
             oturum.execute(
                 sema.nesne.insert().values(
-                    seviye=0, durum="ONAY_BEKLIYOR", olusturma_zamani=SIMDI
+                    seviye=0, durum="HAYALET", olusturma_zamani=SIMDI
                 )
             )
 

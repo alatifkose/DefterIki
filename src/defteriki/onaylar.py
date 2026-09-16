@@ -55,6 +55,9 @@ class OnayTalebi:
 class Karar:
     onaylandi: bool
     gerekce: str | None = None
+    secilen_sartlar: tuple[int, ...] = ()
+    """NESNE_ACILISI onayında kullanıcının mükerrerlik şartı seçtiği özellik
+    kimlikleri (K14); boş olabilir ("şart yok"). Diğer türlerde kullanılmaz."""
 
 
 type KararEtkisi = Callable[[Session, OnayTalebi, Karar, datetime], None]
@@ -186,6 +189,7 @@ def karar_uygula(
                 "gerekce": karar.gerekce,
                 "aktor": aktor.value,
                 "gorulen_hedef_surumu": gorulen_hedef_surumu,
+                "secilen_sartlar": list(karar.secilen_sartlar),
             },
             cozum_zamani=simdi,
         )

@@ -101,7 +101,13 @@ def test_satir_durumlari_c08_ile_ayni() -> None:
 
 
 def test_nesne_yon_eksen_degerleri() -> None:
-    assert [d.value for d in sz.NesneDurumu] == ["AKTIF", "ENGELLI", "PASIF", "SILINDI"]
+    assert [d.value for d in sz.NesneDurumu] == [
+        "ONAY_BEKLIYOR",
+        "AKTIF",
+        "ENGELLI",
+        "PASIF",
+        "SILINDI",
+    ]
     assert [d.value for d in sz.Yon] == ["ARTTIR", "AZALT"]
     assert [d.value for d in sz.Eksen] == ["VARLIK", "BORC", "GIDER"]
 

@@ -87,6 +87,9 @@ class SatirDurumu(StrEnum):
 
 
 class NesneDurumu(StrEnum):
+    ONAY_BEKLIYOR = "ONAY_BEKLIYOR"
+    """Cowork önerdi, kullanıcı henüz onaylamadı (karar 2026-09-16: nesne onaydan
+    önce bu etiketle yazılır); finansal yazma kabul etmez."""
     AKTIF = "AKTIF"
     ENGELLI = "ENGELLI"
     PASIF = "PASIF"

@@ -3,10 +3,11 @@
 Alembic autogenerate ile defteriki.sema.METADATA'dan üretildi, sonra donduruldu;
 bu dosya değişmez, şema değişimi yeni migration ile yapılır. belge → okuma dış
 anahtarı döngü kırmak için use_alter taşır, SQLite'ta satır içi yazılır.
+Nesne durumlarına ONAY_BEKLIYOR 4.4 kararıyla eklendi (henüz gerçek veri yokken).
 
 Sürüm: 0001
 Önceki: yok
-Oluşturma: 2026-09-16 22:30:39.088248
+Oluşturma: 2026-09-16 22:51:31.737877
 """
 
 from __future__ import annotations
@@ -67,7 +68,7 @@ def upgrade() -> None:
         sa.Column("surum", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.Column("olusturma_zamani", sa.DateTime(), nullable=False),
         sa.CheckConstraint(
-            "durum IN ('AKTIF', 'ENGELLI', 'PASIF', 'SILINDI')",
+            "durum IN ('ONAY_BEKLIYOR', 'AKTIF', 'ENGELLI', 'PASIF', 'SILINDI')",  # noqa: E501
             name=op.f("ck_nesne_durum_izinli"),
         ),
         sa.CheckConstraint("seviye >= 0", name=op.f("ck_nesne_seviye_negatif_degil")),

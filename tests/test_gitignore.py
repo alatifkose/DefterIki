@@ -55,6 +55,7 @@ DISLANMAMALI = (
     "src/defteriki/islem_anahtarlari.py",
     "src/defteriki/denetim.py",
     "src/defteriki/onaylar.py",
+    "src/defteriki/nesneler.py",
     "alembic.ini",
     "migrations/env.py",
     "migrations/script.py.mako",

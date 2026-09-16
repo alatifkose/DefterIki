@@ -65,12 +65,14 @@ def etki(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def bekleyen(db: vt.Veritabani) -> tuple[int, on.OnayTalebi]:
-    """ENGELLI durumda bir nesne ve onun NESNE_ACILISI talebi."""
+    """ONAY_BEKLIYOR durumda bir nesne ve onun NESNE_ACILISI talebi."""
     with db.yazma_islemi() as oturum:
         nesne_id = int(
             oturum.execute(
                 sema.nesne.insert()
-                .values(seviye=0, durum="ENGELLI", surum=1, olusturma_zamani=SIMDI)
+                .values(
+                    seviye=0, durum="ONAY_BEKLIYOR", surum=1, olusturma_zamani=SIMDI
+                )
                 .returning(sema.nesne.c.id)
             ).scalar_one()
         )
@@ -177,6 +179,7 @@ def test_onay_hedefi_aktif_yapar_surumu_artirir(
         "gerekce": "bu benim bankam",
         "aktor": "KULLANICI",
         "gorulen_hedef_surumu": 1,
+        "secilen_sartlar": [],
     }
     assert _nesne_durumu(db, nesne_id) == ("AKTIF", 2)
     with db.okuma_islemi() as oturum:
@@ -214,7 +217,7 @@ def test_eski_surumle_karar_reddedilir_ve_yazilmaz(
     assert bilgi.value.kod == "HEDEF_SURUMU_DEGISTI"
     with db.okuma_islemi() as oturum:
         assert on.talep_getir(oturum, talep.id).durum is sz.OnayDurumu.BEKLIYOR
-    assert _nesne_durumu(db, nesne_id) == ("ENGELLI", 1)
+    assert _nesne_durumu(db, nesne_id) == ("ONAY_BEKLIYOR", 1)
 
 
 def test_hedef_arkadan_degisirse_talep_eskir(
@@ -309,7 +312,7 @@ def test_karar_hatasi_her_seyi_geri_alir(
             )
             raise RuntimeError("ekran çöktü")
 
-    assert _nesne_durumu(db, nesne_id) == ("ENGELLI", 1)
+    assert _nesne_durumu(db, nesne_id) == ("ONAY_BEKLIYOR", 1)
     with db.okuma_islemi() as oturum:
         assert on.talep_getir(oturum, talep.id).durum is sz.OnayDurumu.BEKLIYOR
         olay_sayisi = oturum.execute(

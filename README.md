@@ -7,7 +7,7 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1, 4.2 ve 4.3 bitti, 4.4 (nesne)
+(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.4 bitti, 4.5 (arşiv ve belge)
 sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
 defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 4.3 buna göre yeniden kuruldu. Bitenler:
@@ -32,9 +32,12 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Onay talebi, işlem anahtarı ve denetim olayı: kalıcı `BEKLIYOR` talep,
   yalnız ekrana açık sürüm denetimli karar, aynı anahtar aynı sonuç
   (`onaylar.py`, `islem_anahtarlari.py`, `denetim.py`)
+* Nesne tanıtma: serbest özellikli form, üstlerden hesaplanan seviye,
+  `ONAY_BEKLIYOR` ile yazılıp onayda şart seçimiyle `AKTIF`, türüyle
+  eşleşme değeri, bulma (`nesneler.py`)
 
-Henüz yok: nesne/belge/kayıt işlevleri (4.4–4.6), GUI, ürün verisi yazan
-MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
+Henüz yok: belge/kayıt işlevleri (4.5–4.6), mükerrerlik karşılaştırması
+(Aşama 7), GUI, ürün verisi yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
 defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
 `uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
 
@@ -210,7 +213,9 @@ Kurallar:
 
 **Durum listeleri (karar, 2026-09-16).** Tam Plan belge, satır ve nesne
 durumlarını (C08) vermişti; şu listeler açıktı, Claude önerdi, Abdüllatif
-onayladı: kayıt `AKTIF`/`GECERSIZ`; okuma `ACIK`/`TAMAMLANDI`/`IPTAL`;
+onayladı: nesne durumlarına `ONAY_BEKLIYOR` eklendi (C08'in nesne listesi
+`AKTIF`/`ENGELLI`/`PASIF`/`SILINDI` idi; 4.4 kararı: nesne onaydan önce bu
+etiketle yazılır); kayıt `AKTIF`/`GECERSIZ`; okuma `ACIK`/`TAMAMLANDI`/`IPTAL`;
 kaynak rolü `ASIL`/`DESTEK`, kaynak durumu `AKTIF`/`KALDIRILDI`; onay türü
 `NESNE_ACILISI` (diğerleri kendi aşamalarında), onay durumu
 `BEKLIYOR`/`ONAYLANDI`/`REDDEDILDI`. Ayrıca plandan: değer türü
@@ -291,6 +296,72 @@ talep `BEKLIYOR` doğar ve denetim olayı yazar; kilit tutulmaz; onay hedefi
 ve yazılmaz; hedef arkadan değişirse talep eskir; sonuçlanmış talebe yeniden
 karar yok; hedefi silinmiş talep; bekleyenler ve sayfalama; karar hatası
 her şeyi geri alır.
+
+## Nesne tanıtma
+
+Teslim 4.4 (`src/defteriki/nesneler.py`). Kurum, banka, hesap, kart: hepsi
+**nesne**, tür sütunu yok (sözlük: Nesne; K11, K12). Nesnenin ne olduğunu
+Cowork'un yazdığı serbest özellikler ve hiyerarşideki yeri anlatır.
+
+**Abdüllatif'in kuralı (2026-09-16).** Hiçbir nesne belgesiz, toplu ya da
+önceden açılmaz. Garanti BBVA'dan ME adına ekstre geldi → banka ve yalnız
+ME hesabı açılır. Ertesi gün GK ekstresi geldi → Cowork önce arar
+(`nesne_bul`), Garanti zaten var, yalnız GK hesabı onun altına eklenir.
+Başka isme ekstre gelmezse başka hesap açılmaz. Bu akış uçtan uca testtir
+(`test_garanti_akisi_banka_ve_hesaplar_tek_tek_acilir`).
+
+**Akış.** `tanitma_formu()` boş formu ve kuralları verir, veritabanına
+dokunmaz (FORM, K12). `nesne_tanimla(ozellikler, islem_anahtari, aktor,
+ust_idleri, kaynak)` GONDER adımıdır: nesne `ONAY_BEKLIYOR` durumunda
+yazılır; özellikler, üst bağlantıları ve varsa kaynak belge aynı işlemde;
+`NESNE_ACILISI` onay talebi açılır (içeriğinde alan/değer listesi, seviye,
+üstler, kaynak). Karar (yalnız ekran, `onaylar.karar_uygula`): kullanıcı
+özelliklerden 0..n şart seçer (`Karar.secilen_sartlar`, K14); şartlar
+`nesne_sart`a yazılır, nesne `AKTIF`, sürüm artar. Red: nesne `SILINDI`
+(kimlik saklı). Şart yalnız saklanır; eşleşme taraması ve şüphe Aşama 7'de.
+Onay bekleyen üst kabul edilir: Garanti ile ME hesabı aynı anda önerilebilir.
+
+**Seviye (K11).** Cowork seviye göndermez. Üst yoksa 0; varsa üstlerin
+seviyesi + 1. Üstler aynı seviyede olmalı (`SEVIYE_CAKISMASI`); aynı üst
+iki kez, olmayan üst (`HEDEF_BULUNAMADI`), engelli üst (`NESNE_ENGELLI`),
+pasif ya da silinmiş üst reddedilir. Bir nesne birden fazla üste bağlanabilir
+(S02: fiş hem karta hem hesaba).
+
+**Özellikler.** En az bir özellik (C13). Alan adında normalizasyon yok:
+`" IBAN"`, `"IBAN"`, `"iban"` üç ayrı alandır (C05); boş ad ve aynı nesnede
+aynı ad iki kez reddedilir. Sınırlar (C18): nesne başına 200 özellik, alan
+adı 128, değer 4.096 karakter; aşılırsa açık hata, veri kesilmez. Değer türü
+Cowork verebilir; vermezse Python türünden çıkarılır (bool → MANTIKSAL,
+int → TAMSAYI, float/Decimal → ONDALIK, str → METIN, liste/sözlük → JSON;
+TARIH yalnız açıkça). Türe uymayan değer reddedilir; ONDALIK `Decimal`
+olarak saklanır, TARIH ISO. `eslesme_degeri` türüyle kararlı seri hâl
+(`METIN:123` ≠ `TAMSAYI:123`; `2.5` = `2.50`; boş değer `None`, eşleşme
+üretmez). Özellik ve şart güncelleme işlevi yoktur (K13).
+
+**Bulma ve getirme.** `nesne_bul(alan_adi, deger, deger_turu, seviye,
+durumlar)` alan adı ve türüyle değer üzerinden arar; Cowork yeni nesne
+açmadan önce mevcut olanı bununla bulur. `nesne_getir` özellikleri (şart
+işaretiyle), üstleri ve altları verir. `aktif_nesneyi_getir` finansal yazma
+için: `AKTIF` değilse açık hata.
+
+**Kaynak (C13).** `NesneKaynagi(belge_id, okuma_id, konum)` verilirse
+`nesne_kaynak`a yazılır; belge yoksa `HEDEF_BULUNAMADI`. Kurum belgesiz
+açılabilir; kaynak zorunlu değil.
+
+**S03 kapsam dışı.** "Başka defterdeki nesneye bağlantı" senaryosu tek
+defter kararıyla anlamsızlaştı; test yok.
+
+Test (`tests/test_nesneler.py`): Garanti akışı uçtan uca; GONDER
+`ONAY_BEKLIYOR` + talep; aynı anahtar aynı nesne, farklı içerik çakışma; hata
+her şeyi geri alır; seviye 0/1/2; S02 iki üst; S01 farklı seviyeli üstler
+`SEVIYE_CAKISMASI`; olmayan/engelli/pasif üst; aynı üst iki kez; en az bir
+özellik; boş alan adı; aynı alan adı iki kez; alan adı normalize edilmez;
+sınır aşımı (201 özellik, 129 ve 4.097 karakter); tür çıkarımı ve eşleşme
+değeri; türe uymayan değer; şartsız onay `AKTIF`; şart seçimi kalıcı ve
+tekrarsız; başka nesnenin özelliği şart olamaz; red `SILINDI`; onay bekleyen
+üst; kaynak belge kaydı ve olmayan belge reddi; kurum belgesiz; bulma
+filtreleri (alan, değer türüyle, seviye, durum, boş değer); form veritabanına
+dokunmaz; denetim olayları ve anahtar kaydı.
 
 ## Teknik hata günlüğü
 
@@ -386,6 +457,7 @@ src/defteriki/    uygulama paketi
   islem_anahtarlari.py  işlem anahtarı koruması (aynı anahtar aynı sonuç, K08)
   denetim.py      denetim olayı yazımı
   onaylar.py      onay talebi: oluştur, listele, karar uygula (yalnız ekran)
+  nesneler.py     nesne tanıtma (FORM/GONDER), seviye, şart seçimi etkisi, bulma
 migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
