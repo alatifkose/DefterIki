@@ -37,7 +37,7 @@ pythonpath = ["scripts"]
 
 [tool.ruff]
 target-version = "py313"
-src = ["src", "tests", "scripts"]
+src = ["src", "tests", "scripts", "migrations"]
 extend-exclude = [".venv", ".uv", "build", "dist", "wheels"]
 
 [tool.ruff.lint]
@@ -50,7 +50,7 @@ known-first-party = ["defteriki", "kontrol"]
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
-include = ["src", "tests", "scripts"]
+include = ["src", "tests", "scripts", "migrations"]
 exclude = ["**/__pycache__", ".venv", ".uv", "build", "dist", "wheels"]
 extraPaths = ["src", "scripts"]
 venvPath = "."

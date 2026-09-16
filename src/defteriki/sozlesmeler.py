@@ -9,7 +9,10 @@ cevap vermez, yalnız "ne" sorusuna.
   reddedilir, sessiz dönüşüm yoktur.
 * **Yön** ARTTIR / AZALT, **eksen** VARLIK / BORC / GIDER, **para birimi**
   yalnız TRY (C09; alan şemada vardır, TRY dışı değer açık hata).
-* **Durumlar** (C08): belge, satır ve nesne durum adları tek yerde.
+* **Durumlar** (C08): belge, satır ve nesne durum adları tek yerde. Tam
+  Plan'ın açık bıraktığı listeler (defter, kayıt, okuma, kaynak rolü ve durumu,
+  onay türü ve durumu, değer türü, işlem anahtarı kapsamı, denetim aktörü)
+  Teslim 4.2'de Abdüllatif'in onayıyla sabitlendi.
 * **Hatalar**: Tam Plan bölüm 11.2'deki kodlarla bir sınıf ailesi. Her
   hatanın kodu, güvenli açıklaması, tekrar denenebilirliği ve isteğe bağlı
   alan/konum bilgisi vardır. Yığın izi, dosya içeriği ya da ham yük mesaja
@@ -85,6 +88,77 @@ class NesneDurumu(StrEnum):
     ENGELLI = "ENGELLI"
     PASIF = "PASIF"
     SILINDI = "SILINDI"
+
+
+# Aşağıdaki listeler Tam Plan'da açık bırakılmıştı; 2026-09-16'da Claude önerdi,
+# Abdüllatif "öneriler tamam" dedi (Teslim 4.2).
+
+
+class DefterDurumu(StrEnum):
+    ONAY_BEKLIYOR = "ONAY_BEKLIYOR"
+    """Tanımlandı, onay uygulanmadı; yazma kabul etmez (C12)."""
+    AKTIF = "AKTIF"
+    PASIF = "PASIF"
+
+
+class KayitDurumu(StrEnum):
+    AKTIF = "AKTIF"
+    GECERSIZ = "GECERSIZ"
+    """Geçersizleştirme Aşama 8'de gelir; ad şemada hazır."""
+
+
+class OkumaDurumu(StrEnum):
+    ACIK = "ACIK"
+    TAMAMLANDI = "TAMAMLANDI"
+    IPTAL = "IPTAL"
+
+
+class KaynakRolu(StrEnum):
+    """Bir kaydı destekleyen satırın rolü (C11: iki kaynaklıda yalnız destek kalkar)."""
+
+    ASIL = "ASIL"
+    DESTEK = "DESTEK"
+
+
+class KaynakDurumu(StrEnum):
+    AKTIF = "AKTIF"
+    KALDIRILDI = "KALDIRILDI"
+
+
+class OnayTuru(StrEnum):
+    """Onay talebi türleri; diğerleri (ayrı tutma, pasifleştirme) kendi aşamalarında."""
+
+    DEFTER_TANIMLAMA = "DEFTER_TANIMLAMA"
+    NESNE_ACILISI = "NESNE_ACILISI"
+
+
+class OnayDurumu(StrEnum):
+    BEKLIYOR = "BEKLIYOR"
+    ONAYLANDI = "ONAYLANDI"
+    REDDEDILDI = "REDDEDILDI"
+
+
+class DegerTuru(StrEnum):
+    """Nesne özelliği değer türü; eşleşme türüyle karşılaştırılır (Tam Plan 5.1)."""
+
+    METIN = "METIN"
+    TAMSAYI = "TAMSAYI"
+    ONDALIK = "ONDALIK"
+    TARIH = "TARIH"
+    MANTIKSAL = "MANTIKSAL"
+    JSON = "JSON"
+
+
+class IslemAnahtariKapsami(StrEnum):
+    SISTEM = "SISTEM"
+    """Defter henüz yokken (ilk defter) kullanılan kapsam; kapsam_id 0."""
+    DEFTER = "DEFTER"
+
+
+class DenetimAktoru(StrEnum):
+    COWORK = "COWORK"
+    KULLANICI = "KULLANICI"
+    UYGULAMA = "UYGULAMA"
 
 
 # --- hatalar (Tam Plan 11.2) -------------------------------------------------

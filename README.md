@@ -7,8 +7,8 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1 bitti, 4.2 (Alembic ve ilk
-migration) sırada. Bitenler:
+(veritabanı çekirdeği) sürüyor: Teslim 4.1 ve 4.2 bitti, 4.3 (defter ve
+onay talebi) sırada. Bitenler:
 
 * uv ile paket iskeleti (`src/defteriki`)
 * Merkezi ayar yönetimi (`src/defteriki/ayarlar.py`)
@@ -25,9 +25,14 @@ migration) sırada. Bitenler:
   durum adları, hata ailesi, sayfalama (`src/defteriki/sozlesmeler.py`)
 * Veritabanı bağlantısı ve işlem sınırları: WAL, `BEGIN IMMEDIATE`, salt
   okunur okuma, geri alma garantisi (`src/defteriki/veritabani.py`)
+* Şema ve ilk migration: on altı tablo, isimli kısıtlar, bileşik dış
+  anahtarlar, Alembic ile sürüm denetimi (`src/defteriki/sema.py`,
+  `migrations/`)
 
-Henüz yok: tablolar ve migration (4.2), veri modeli, GUI, ürün verisi yazan
-MCP aracı.
+Henüz yok: defter/nesne/belge/kayıt işlevleri (4.3–4.6), GUI, ürün verisi
+yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
+defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
+`uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
 
 ## Kurulum
 
@@ -158,6 +163,75 @@ Ortak sözleşmeler `src/defteriki/sozlesmeler.py`'de; ürün mantığı içerme
   itiraz ederse ad değişir ya da kaldırılır.
 * `Sayfalama(sinir=100, baslangic=0)`: sunucu tarafı, en çok 500.
 
+### Şema ve migration
+
+On altı tablo `src/defteriki/sema.py`'de SQLAlchemy Core `Table` nesneleriyle
+tanımlıdır (Tam Plan bölüm 5; Yürütme Planı 4.2 listesi). Veritabanında
+Alembic migration'larıyla kurulur: `migrations/versions/0001_ilk_sema.py`
+`METADATA`'dan autogenerate ile üretilip donduruldu; şema değişimi yalnız yeni
+migration ile yapılır, `create_all` kullanılmaz. Metadata ile veritabanındaki
+şema arasında fark olmaması testle doğrulanır (`compare_metadata == []`).
+
+| Grup | Tablolar |
+|---|---|
+| Defter ve nesne | `defter`, `nesne`, `nesne_ozellik`, `nesne_baglanti`, `nesne_sart`, `nesne_kaynak` |
+| Belge | `arsiv_dosya`, `belge`, `okuma`, `okuma_satir` |
+| Para | `kayit`, `kayit_kaynak`, `etki` |
+| İşletim | `onay_talep`, `islem_anahtari`, `denetim_olay` |
+
+Kurallar:
+
+* Kimlikler `INTEGER PRIMARY KEY AUTOINCREMENT`; silinen kimlik yeniden
+  verilmez.
+* Her iş tablosu `defter_id` taşır; alt tablolar üst tabloya bileşik dış
+  anahtarla `(defter_id, hedef_id) → hedef(defter_id, id)` bağlanır, bunun
+  için üst tablolarda `UNIQUE(defter_id, id)` vardır. Başka defterin
+  nesnesine kayıt bağlamak veritabanı düzeyinde imkânsızdır (testli).
+  İstisnalar: `arsiv_dosya` defterden bağımsız (aynı dosya birden fazla
+  defterde belge olabilir); `islem_anahtari` kapsamı `kapsam_turu`
+  (`SISTEM`/`DEFTER`) ve `kapsam_id` ile taşır.
+* Bütün kısıtlar isimli (`pk_`, `fk_`, `uq_`, `ck_`, `ix_` kalıbı). Durum,
+  yön, eksen, para birimi, tür sütunları izinli değerlerle CHECK'li;
+  `tutar_kurus >= 0`, `seviye >= 0`, `alt_id <> ust_id`, boş alan adı ve
+  boş anahtar reddedilir, `sha256` 64 karakter.
+* Zaman damgaları UTC `DateTime`; kaynak tarihleri (`islem_tarihi`,
+  `valor_tarihi`) ayrı `Date`.
+* İndeksler Tam Plan 5.3'teki gibi: nesne (defter, seviye, id); bağlantı iki
+  yönlü; özellik (defter, alan adı, değer türü, eşleşme değeri); kayıt
+  (defter, asıl nesne, işlem tarihi, id); etki (defter, nesne, eksen, para
+  birimi, kayıt); kaynak iki yönlü; onay (defter, durum, id). Ölçülmeden ek
+  indeks eklenmez.
+* Aşama 8 alanları (`kayit.olay_id`, `islem_turu`, `yerine_gecen_id`,
+  `etki.borc_id`) ve Aşama 7'nin mükerrerlik tabloları bu şemada yoktur;
+  `okuma_satir.aday_grup_id` yer tutucudur. Tam Plan'daki `gonderim` tablosu
+  Yürütme Planı 4.2 listesinde olmadığı için kurulmadı.
+
+**Durum listeleri (karar, 2026-09-16).** Tam Plan belge, satır ve nesne
+durumlarını (C08) vermişti; şu listeler açıktı, Claude önerdi, Abdüllatif
+onayladı: defter `ONAY_BEKLIYOR`/`AKTIF`/`PASIF`; kayıt `AKTIF`/`GECERSIZ`;
+okuma `ACIK`/`TAMAMLANDI`/`IPTAL`; kaynak rolü `ASIL`/`DESTEK`, kaynak durumu
+`AKTIF`/`KALDIRILDI`; onay türü `DEFTER_TANIMLAMA`/`NESNE_ACILISI`, onay
+durumu `BEKLIYOR`/`ONAYLANDI`/`REDDEDILDI`. Ayrıca plandan: değer türü
+`METIN`/`TAMSAYI`/`ONDALIK`/`TARIH`/`MANTIKSAL`/`JSON`, denetim aktörü
+`COWORK`/`KULLANICI`/`UYGULAMA`. Hepsi `sozlesmeler.py`'de `StrEnum`.
+
+Sürüm denetimi (`sema.py`): `BEKLENEN_SEMA_SURUMU = "0001"`.
+`semayi_denetle` veritabanındaki Alembic sürümünü okur; kurulmamış ya da
+farklıysa `SemaSurumuUyumsuz` verir, eski şemaya yazılmaz. `semayi_yukselt`
+migration'ları tek yazma işleminde (`BEGIN IMMEDIATE`) uygular, ardından
+`foreign_key_check` ve `integrity_check` çalıştırır. Komut satırı:
+`uv run alembic upgrade head` (yol `DEFTERIKI_*` ayarlarından;
+`alembic.ini`'de URL yok, yollar `%(here)s` ile ini dosyasına göre).
+
+Test (`tests/test_sema.py`): boş veritabanına kurulum on altı tablo;
+`foreign_key_check`/`integrity_check` temiz; metadata ile migration
+arasında fark yok; sürüm denetimi (kurulmamış, farklı sürüm); tekrar
+yükseltme; geri alma bütün tabloları kaldırır; kısıtlar veritabanında
+çalışır (izinsiz durum, defterler arası bağlantı, negatif tutar, TRY dışı
+para birimi, kendine bağlantı, boş alan adı, aynı alan adı iki kez,
+kimlik yeniden kullanılmaz); komut satırından yükseltme başka çalışma
+dizininden ayarlardaki yolu bulur.
+
 Test (`tests/test_veritabani.py`, `tests/test_sozlesmeler.py`): PRAGMA
 değerleri; iki ayrı süreç aynı ayarlarla aynı dosyayı çözer ve birbirinin
 yazdığını okur; FK ihlali reddedilir; hata sonrası yarım satır kalmaz; kilit
@@ -255,6 +329,9 @@ src/defteriki/    uygulama paketi
   mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu ve araçları
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
+  sema.py         on altı tablo (METADATA), şema sürümü denetimi ve yükseltme
+migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
+alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)
 .pre-commit-config.yaml  commit öncesi kanca; kontrol.py'yi çalıştırır
