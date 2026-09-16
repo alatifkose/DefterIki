@@ -26,6 +26,7 @@ Modül import edildiğinde diske dokunulmaz.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, ClassVar
 
@@ -318,6 +319,14 @@ def para_birimi_dogrula(deger: object, alan: str = "para_birimi") -> ParaBirimi:
     raise ParaBirimiDesteklenmiyor(
         f"desteklenen para birimleri: {desteklenen}", alan=alan
     )
+
+
+# --- zaman -------------------------------------------------------------------
+
+
+def simdi_utc() -> datetime:
+    """Sistem zaman damgası: UTC, saat dilimi bilgisi olmadan (SQLite'a düz yazılır)."""
+    return datetime.now(UTC).replace(tzinfo=None, microsecond=0)
 
 
 # --- sayfalama ---------------------------------------------------------------

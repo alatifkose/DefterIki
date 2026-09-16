@@ -7,8 +7,8 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1 ve 4.2 bitti, 4.3 (defter ve
-onay talebi) sırada. Bitenler:
+(veritabanı çekirdeği) sürüyor: Teslim 4.1, 4.2 ve 4.3 bitti, 4.4 (nesne)
+sırada. Bitenler:
 
 * uv ile paket iskeleti (`src/defteriki`)
 * Merkezi ayar yönetimi (`src/defteriki/ayarlar.py`)
@@ -28,9 +28,12 @@ onay talebi) sırada. Bitenler:
 * Şema ve ilk migration: on altı tablo, isimli kısıtlar, bileşik dış
   anahtarlar, Alembic ile sürüm denetimi (`src/defteriki/sema.py`,
   `migrations/`)
+* Defter ve onay talebi: defter `ONAY_BEKLIYOR` doğar, ekrandan onaylanınca
+  `AKTIF`; işlem anahtarı koruması, sürüm denetimli karar, denetim olayı
+  (`defterler.py`, `onaylar.py`, `islem_anahtarlari.py`, `denetim.py`)
 
-Henüz yok: defter/nesne/belge/kayıt işlevleri (4.3–4.6), GUI, ürün verisi
-yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
+Henüz yok: nesne/belge/kayıt işlevleri (4.4–4.6), GUI, ürün verisi yazan
+MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
 defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
 `uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
 
@@ -239,6 +242,56 @@ tutulurken `BEGIN IMMEDIATE` salt SELECT'i bile bekletir ve süre dolunca
 `VERITABANI_MESGUL` verir; yazar okumayı engellemez; import dosya yaratmaz;
 Hypothesis ile `KurusTutar` sınırları (negatif, float, bool reddi).
 
+## Defter ve onay talebi
+
+Teslim 4.3. Ekran ve MCP yok; işlev ve test düzeyi. Bütün işlevler bir
+`Session` alır ve **commit yapmaz**: işlem sahibi çağırandır
+(`Veritabani.yazma_islemi`). Bir işlev ortada düşerse aynı işlemdeki her şey
+(defter, talep, anahtar kaydı, denetim olayı) geri alınır; testli.
+
+**Defter** (`src/defteriki/defterler.py`). `defter_tanimla(ad,
+islem_anahtari, aktor)` defteri `ONAY_BEKLIYOR` durumunda açar ve
+`DEFTER_TANIMLAMA` onay talebi üretir (C12). Defter onaylanmadan yazma kabul
+etmez: `aktif_defteri_getir` `AKTIF` dışı durumda `DEFTER_UYUSMAZLIGI` verir.
+İlk defter açılırken henüz defter yok, bu yüzden işlem anahtarı `SISTEM`
+kapsamlıdır (`kapsam_id` 0). Kapsam denetimi `defterde_oldugunu_dogrula`:
+başka defterin kaydına erişim `DEFTER_UYUSMAZLIGI`. `defter_getir`,
+`defter_listele` (sayfalı).
+
+**İşlem anahtarı** (`src/defteriki/islem_anahtarlari.py`, K08). Her yazma
+işlevi anahtar alır; `(kapsam_turu, kapsam_id, arac_adi, anahtar)` benzersiz.
+Aynı anahtar aynı içerikle gelirse saklı sonuç döner, hiçbir şey yeniden
+yazılmaz (`zaten_vardi=True`); farklı içerik `ANAHTAR_ICERIK_CAKISMASI`.
+İçerik karşılaştırması isteğin kanonik JSON'unun SHA-256 özetiyle yapılır,
+ham istek saklanmaz. Anahtar kaydı, iş sonucu ve denetim olayı aynı işlemde.
+
+**Onay talebi** (`src/defteriki/onaylar.py`). `talep_olustur` kalıcı
+`BEKLIYOR` talep açar; kullanıcı beklerken açık transaction ya da kilit
+tutulmaz (testli: talep yazıldıktan hemen sonra başka bağlantı yazma kilidi
+alabilir). `bekleyenleri_listele` yalnız `BEKLIYOR` olanları verir.
+`karar_uygula(defter_id, talep_id, gorulen_hedef_surumu, karar)` **yalnız
+ekrana açılır**; MCP kapısına "kullanıcı onayladı" parametresi hiç
+sunulmaz. Sürüm denetimi: talebin taşıdığı sürüm, kullanıcının ekranda
+gördüğü sürüm ve hedefin güncel sürümü üçü aynı değilse
+`HEDEF_SURUMU_DEGISTI`, hiçbir şey yazılmaz. Sonuçlanmış talebe yeniden karar
+verilemez. Karar etkisi türe göre kayıtlıdır (`KARAR_ETKILERI`):
+`DEFTER_TANIMLAMA` onay → defter `AKTIF`, red → `PASIF`; iki hâlde de
+hedefin sürümü bir artar. `NESNE_ACILISI` etkisi 4.4'te eklenir.
+
+**Denetim olayı** (`src/defteriki/denetim.py`). Her yazma aynı işlemde
+`denetim_olay` satırı bırakır: aktör (`COWORK`/`KULLANICI`/`UYGULAMA`),
+eylem, hedef (`tablo:kimlik`), önceki/sonraki durum, işlem anahtarı kaydı.
+Kişisel veri taşımaz.
+
+Test (`tests/test_defterler.py`, `tests/test_onaylar.py`): ilk defter
+`SISTEM` kapsamlı anahtarla; aynı anahtar aynı içerik yeni defter açmaz;
+farklı içerik çakışır ve yazmaz; boş ad/anahtar reddi; hata her şeyi geri
+alır; kilit tutulmaz; onay uygulanmadan defter `AKTIF` olmaz; onay → `AKTIF`
+ve sürüm 2, red → `PASIF`; eski sürümle karar reddedilir ve yazılmaz; hedef
+arkadan değişirse talep eskir; sonuçlanmış talebe yeniden karar yok; başka
+defterin talebine karar yok; bekleyenler ve sayfalama; karar hatası geri
+alınır.
+
 ## Teknik hata günlüğü
 
 Günlük yalnızca ayarlardaki log dizinine yazar: `<log dizini>/defteriki.log`
@@ -330,6 +383,10 @@ src/defteriki/    uygulama paketi
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
   sema.py         on altı tablo (METADATA), şema sürümü denetimi ve yükseltme
+  islem_anahtarlari.py  işlem anahtarı koruması (aynı anahtar aynı sonuç, K08)
+  denetim.py      denetim olayı yazımı
+  onaylar.py      onay talebi: oluştur, listele, karar uygula (yalnız ekran)
+  defterler.py    defter tanımla/getir/listele; kapsam denetimi
 migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
