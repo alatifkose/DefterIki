@@ -6,8 +6,9 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 ## Durum
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
-Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde, geçici
-deneme araçları kaldırıldı. Aşama 4 sırada. Bitenler:
+Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
+(veritabanı çekirdeği) sürüyor: Teslim 4.1 bitti, 4.2 (Alembic ve ilk
+migration) sırada. Bitenler:
 
 * uv ile paket iskeleti (`src/defteriki`)
 * Merkezi ayar yönetimi (`src/defteriki/ayarlar.py`)
@@ -20,8 +21,13 @@ deneme araçları kaldırıldı. Aşama 4 sırada. Bitenler:
 * MCP kapısı iskeleti: `uv run defteriki-mcp`, tek araç `sistem_durumu`
   (`src/defteriki/mcp_kapisi.py`); Cowork ile bağlantı, dosya erişimi ve
   çok adımlı protokol gerçek istemciyle ölçüldü
+* Ortak sözleşmeler: katı kimlik ve kuruş tutar, yön/eksen/para birimi,
+  durum adları, hata ailesi, sayfalama (`src/defteriki/sozlesmeler.py`)
+* Veritabanı bağlantısı ve işlem sınırları: WAL, `BEGIN IMMEDIATE`, salt
+  okunur okuma, geri alma garantisi (`src/defteriki/veritabani.py`)
 
-Henüz yok: veritabanı, veri modeli, GUI, ürün verisi yazan MCP aracı.
+Henüz yok: tablolar ve migration (4.2), veri modeli, GUI, ürün verisi yazan
+MCP aracı.
 
 ## Kurulum
 
@@ -112,6 +118,53 @@ yöntemi Cowork'la çalışır, talep durumu veritabanında tutulur.
 | 3.3 | Dosya erişim denemesi | **Bitti (2026-09-15): dosya yolu yöntemi çalıştı, parça yükleme gerekmez.** Araç `dosya_dene` yazıldı ve testlendi (izinli dosya, boş dosya, alt dizin, dizin dışı, `..`, göreli yol, olmayan dosya, dizin, okuma hatası, stdio üzerinden okuma ve red; simgesel bağlantı testleri Windows'ta bağlantı yetkisi yoksa atlanır). Cowork ayarı: `mcpServers.defteriki.env` → `DEFTERIKI_GELEN_DIZINI=C:/dev/DefterIki-gelen`; uygulama yeniden başlayınca dizin kendiliğinden oluştu. Deneme ~402 KB'lik gerçek bir hesap özeti PDF'iyle iki senaryoda yapıldı: (a) dosya elle gelen dizinine kopyalandı, Cowork'a yol söylendi → `sonuc=okundu`; (b) PDF Cowork'a yüklendi, gelen dizinine bırakması istendi → Cowork dosyayı dizine yazdı ve `dosya_dene` ile okuttu → `sonuc=okundu`. İki dosyanın SHA-256 özeti birebir aynı; Cowork dosyayı bozmadan aktarıyor. Günlükte iki `mcp_dosya_deneme` satırı, red ya da hata yok. Aşama 4 belge alımı bu yöntemle kurulacak: Cowork dosyayı gelen dizinine bırakır, yolu MCP aracına verir. |
 | 3.4 | Çok adımlı protokol denemesi | **Bitti (2026-09-16): Cowork BEKLIYOR döngüsünü kendi başına, sadakatle yürüttü.** Araç çifti `deneme_baslat` / `deneme_durumu` yazıldı ve testlendi (süreç içi sahte saatle bekle→tamamla geçişi, aynı anahtar aynı kimlik, boş anahtar reddi, bilinmeyen kimlik, yanıt ve günlükte anahtar yok; stdio üzerinden başlat→durum→bilinmeyen→tekrar başlat döngüsü). Cowork'a tek cümle verildi: "bir deneme işi başlat; bekliyor dönerse aynı anahtarla durumu sor, tamamlanınca bildir." Günlük (`mcp_deneme`): `deneme_baslat` → BEKLIYOR, talep kimliği verildi; `deneme_durumu` üç kez soruldu: 3,1 s (BEKLIYOR), 17,4 s (BEKLIYOR), 42,5 s (TAMAMLANDI). Sorgu aralıkları yaklaşık 3 s, 14 s, 25 s; Cowork bekleme süresini kendi uzattı, vazgeçmedi, kimliği doğru taşıdı, anahtarı değiştirmedi, aynı işi yeniden başlatmadı. Hiçbir çağrı açık kalmadı; durum sorguları anında döndü. Dört çağrı da aynı sunucu sürecinden (`surec` eşit) geldi: Claude masaüstü sunucuyu yine iki kalıcı süreç olarak başlattı ama tek sohbetin bütün çağrıları tek sürece gitti; BILINMIYOR görülmedi. Aşama 5 için çıkarım: BEKLIYOR + talep kimliği + istemcinin tekrar sorması çalışan bir yöntem; talep durumu yine de belleğe değil veritabanına yazılır, çünkü sohbetler ve uygulama yeniden başlatmaları arası süreç garantisi yok. |
 
+## Veritabanı
+
+SQLite, tek dosya, yolu yalnız ayarlardan (`DEFTERIKI_VERITABANI_YOLU` ya da
+`<veri kökü>/<ortam>/defteriki.sqlite3`). `src/defteriki/veritabani.py` bu
+dosyaya iki motor açar; import ve kurulum diske dokunmaz, dosya ilk yazma
+işleminde oluşur.
+
+* **Yazma**: her bağlantıda `foreign_keys=ON`, `journal_mode=WAL`,
+  `busy_timeout=5000`, `synchronous=FULL`. `yazma_islemi()` tek işlemdir ve
+  `BEGIN IMMEDIATE` ile açılır: yazma kilidi kapıda alınır, iki yazar ortada
+  çakışmaz. Çıkışta başarı COMMIT, herhangi bir hata ROLLBACK; yarım satır
+  kalmaz. İşlem sahibi en dıştaki çağrıdır, içerideki işlevler commit yapmaz.
+  Kilit 5 saniyede alınamazsa `VeritabaniMesgul` (kod `VERITABANI_MESGUL`,
+  tekrar denenebilir).
+* **Okuma**: `okuma_islemi()` aynı PRAGMA'lar ve `query_only=ON` ile salt
+  okunur oturum verir; yazma denemesini SQLite reddeder. WAL sayesinde yazma
+  sürerken okuma bekletilmez ve commit edilmemiş veriyi görmez.
+* Python'un `sqlite3` sürücüsünün kendi BEGIN'i kapatılır; BEGIN'i SQLAlchemy
+  `begin` olayıyla biz veririz, aksi hâlde `BEGIN IMMEDIATE` uygulanamaz.
+
+Ortak sözleşmeler `src/defteriki/sozlesmeler.py`'de; ürün mantığı içermez:
+
+* `Kimlik` pozitif tam sayı, `KurusTutar` kuruş cinsinden 0 ya da pozitif tam
+  sayı (K05). İkisi de katı: `12.0`, `True`, `"100"` reddedilir, yuvarlama
+  yok. `kurus_tutar_dogrula` → `TUTAR_GECERSIZ`.
+* `Yon` ARTTIR/AZALT, `Eksen` VARLIK/BORC/GIDER, `ParaBirimi` yalnız TRY
+  (C09; `para_birimi_dogrula` → `PARA_BIRIMI_DESTEKLENMIYOR`).
+* Durum adları (C08): belge ARSIVLENDI → OKUNUYOR → KARAR_BEKLIYOR → HAZIR →
+  KAYITLI, GECERSIZ, YERINE_GECILDI; satır YAZILDI, KARAR_BEKLIYOR,
+  MEVCUDA_BAGLANDI, KAPSAM_DISI; nesne AKTIF, ENGELLI, PASIF, SILINDI.
+* Hata ailesi: `DefterikiHatasi` kökü; Tam Plan 11.2'deki kodların her biri
+  bir sınıf (`BELGE_YOK`, `DEFTER_UYUSMAZLIGI`, `TUTAR_GECERSIZ`,
+  `ANAHTAR_ICERIK_CAKISMASI`, `HEDEF_SURUMU_DEGISTI`, `VERITABANI_MESGUL`
+  ...). Her hatada kod, güvenli mesaj, isteğe bağlı alan/konum ve tekrar
+  denenebilirlik var; yalnız `VERITABANI_MESGUL` tekrar denenebilir.
+  **Karar notu:** 11.2'de genel girdi hatası için kod yok; kimlik ve
+  sayfalama için `GIRDI_GECERSIZ` teknik kod olarak eklendi. Abdüllatif
+  itiraz ederse ad değişir ya da kaldırılır.
+* `Sayfalama(sinir=100, baslangic=0)`: sunucu tarafı, en çok 500.
+
+Test (`tests/test_veritabani.py`, `tests/test_sozlesmeler.py`): PRAGMA
+değerleri; iki ayrı süreç aynı ayarlarla aynı dosyayı çözer ve birbirinin
+yazdığını okur; FK ihlali reddedilir; hata sonrası yarım satır kalmaz; kilit
+tutulurken `BEGIN IMMEDIATE` salt SELECT'i bile bekletir ve süre dolunca
+`VERITABANI_MESGUL` verir; yazar okumayı engellemez; import dosya yaratmaz;
+Hypothesis ile `KurusTutar` sınırları (negatif, float, bool reddi).
+
 ## Teknik hata günlüğü
 
 Günlük yalnızca ayarlardaki log dizinine yazar: `<log dizini>/defteriki.log`
@@ -200,6 +253,8 @@ src/defteriki/    uygulama paketi
   baslangic.py    uv run defteriki giriş noktası; ortak hazırlık (ortami_hazirla)
   gunluk.py       teknik hata günlüğü
   mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu ve araçları
+  sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
+  veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)
 .pre-commit-config.yaml  commit öncesi kanca; kontrol.py'yi çalıştırır
@@ -216,9 +271,9 @@ Bu projede kullanılacak teknoloji. Mutlak değil; ihtiyaç duyulması halinde d
 * uv.lock — bağımlılık kilidi
 * SQLite — ilişkisel veritabanı
 * WAL — SQLite çalışma/journal modu; ayrı bir teknoloji değil
-* SQLAlchemy 2.x — ORM / veritabanı erişimi
-* Alembic — migration
-* Pydantic 2.x — MCP giriş/çıkış ve veri doğrulama
+* SQLAlchemy 2.0 — veritabanı erişimi (kilitli: `uv.lock`)
+* Alembic 1.20 — migration (Aşama 4.2'den itibaren)
+* Pydantic 2.13 — katı tür doğrulama; ileride MCP giriş/çıkış şemaları
 * MCP Python SDK 2.x (`mcp`, `MCPServer`) — Cowork ↔ DEFTERIKI kapısı
 * PySide6 — masaüstü GUI için
 * pytest — test
