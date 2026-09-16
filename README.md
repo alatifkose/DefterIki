@@ -158,7 +158,7 @@ Ortak sözleşmeler `src/defteriki/sozlesmeler.py`'de; ürün mantığı içerme
   KAYITLI, GECERSIZ, YERINE_GECILDI; satır YAZILDI, KARAR_BEKLIYOR,
   MEVCUDA_BAGLANDI, KAPSAM_DISI; nesne AKTIF, ENGELLI, PASIF, SILINDI.
 * Hata ailesi: `DefterikiHatasi` kökü; Tam Plan 11.2'deki kodların her biri
-  bir sınıf (`BELGE_YOK`, `DEFTER_UYUSMAZLIGI`, `TUTAR_GECERSIZ`,
+  bir sınıf (`BELGE_YOK`, `HEDEF_BULUNAMADI`, `TUTAR_GECERSIZ`,
   `ANAHTAR_ICERIK_CAKISMASI`, `HEDEF_SURUMU_DEGISTI`, `VERITABANI_MESGUL`
   ...). Her hatada kod, güvenli mesaj, isteğe bağlı alan/konum ve tekrar
   denenebilirlik var; yalnız `VERITABANI_MESGUL` tekrar denenebilir.
