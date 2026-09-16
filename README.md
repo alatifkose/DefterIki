@@ -7,8 +7,8 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.4 bitti, 4.5 (arşiv ve belge)
-sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
+(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.5 bitti, 4.6 (tek işlem türü
+ve etkin bakiye) sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
 defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 4.3 buna göre yeniden kuruldu. Bitenler:
 
@@ -35,8 +35,12 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Nesne tanıtma: serbest özellikli form, üstlerden hesaplanan seviye,
   `ONAY_BEKLIYOR` ile yazılıp onayda şart seçimiyle `AKTIF`, türüyle
   eşleşme değeri, bulma (`nesneler.py`)
+* Belge arşivi ve belge akışı: gelen dizininden içerik adresli arşive
+  atomik kopya, belge tanımlama (aynı dosya tek belge), okuma, atomik satır
+  gönderimi, okuma tamamlama ve uygulamanın tanımladığı belge kaydı
+  (`arsiv.py`, `belgeler.py`)
 
-Henüz yok: belge/kayıt işlevleri (4.5–4.6), mükerrerlik karşılaştırması
+Henüz yok: hareket yazma ve bakiye (4.6), mükerrerlik karşılaştırması
 (Aşama 7), GUI, ürün verisi yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
 defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
 `uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
@@ -363,6 +367,99 @@ tekrarsız; başka nesnenin özelliği şart olamaz; red `SILINDI`; onay bekleye
 filtreleri (alan, değer türüyle, seviye, durum, boş değer); form veritabanına
 dokunmaz; denetim olayları ve anahtar kaydı.
 
+## Belge arşivi ve belge akışı
+
+Teslim 4.5 (`src/defteriki/arsiv.py`, `src/defteriki/belgeler.py`). Ekran ve
+MCP aracı yok; işlev ve test düzeyi. Cowork'un belgeyi gelen dizinine
+bırakıp yolunu vermesi Aşama 3.3'te ölçülen yöntemdir (C10); parça yükleme
+gerekmediği için yazılmadı.
+
+**Arşiv (`arsiv.py`).** `dosyayi_arsivle(yol, gelen_dizini, belge_dizini)`
+yolu 3.3'teki sırayla denetler (mutlak, `..` yok, gerçek yol izinli gelen
+dizininin altında, simgesel bağlantı ya da takma yol değil, sıradan dosya;
+red `GIRDI_GECERSIZ` + kategorik gerekçe, mesajda yol yok), dosyayı
+`<belge dizini>/gecici/<rastgele>.tmp` adına akışla kopyalarken SHA-256 ve
+boyutu hesaplar, 50 MiB sınırını (C18) aşınca keser, `fsync` sonrası
+`os.replace` ile `<ilk iki hex>/<sha256><uzantı>` yoluna atomik taşır.
+Herhangi bir adım düşerse geçici dosya silinir; yarım kopya kalmaz. Aynı
+içerik daha önce arşivlendiyse ikinci dosya üretilmez. MIME ilk baytların
+imzasından (PDF, PNG, JPEG) belirlenir; imza biliniyorsa uzantı uyuşmalı,
+bilinmiyorsa uzantıdan tahmin, o da yoksa `application/octet-stream`. Boş
+dosya belge olamaz. `arsivde_var_mi` dosyanın yerinde ve kayıtlı boyutta
+olduğunu söyler (okuma başlatma ön şartı).
+
+**Belge alma.** `belge_al(veritabani, yol, ...)` C10 akışıdır: önce
+arşivler, sonra kısa yazma işleminde `belge_tanimla` çağırır. Dosya ve
+veritabanı tek işlem değildir (Tam Plan 8.1): veritabanı düşerse dosya
+arşivde sahipsiz kalır, kaynaksız kayıt oluşmaz (sahipsiz dosya uzlaştırması
+Aşama 9). `belge_tanimla` `arsiv_dosya` + `ARSIVLENDI` belge yazar; aynı
+sha256 daha önce belge olduysa o belge döner, `zaten_vardi=True`, hiçbir şey
+yazılmaz (K18, `UNIQUE(belge.dosya_id)`). İşlem anahtarı zorunlu (araç adı
+`belge_al`).
+
+**Okuma.** `okuma_baslat(belge_id, sema_surumu, belge_dizini, icerik,
+tamlik)` yalnız `ARSIVLENDI` belgede sürüm 1 okumayı `ACIK` açar, belge
+`OKUNUYOR`. Arşiv dosyası diskte yerinde değilse `ARSIV_EKSIK` (S10);
+belge yoksa `BELGE_YOK`. `sema_surumu` Cowork'un uyduğu okuma sözleşmesinin
+sürümüdür; Aşama 5'te `docs/cowork.md` ile sabitlenir, şimdilik boş olmayan
+kısa metin. `Tamlik(beklenen_satir_sayisi, acilis_bakiyesi_kurus,
+kapanis_bakiyesi_kurus, toplam_giris_kurus, toplam_cikis_kurus)` isteğe
+bağlıdır; verilmeyen alan "bilinmiyor", "belgenin tamamı okundu" iddiası
+üretilmez. Yeni okuma sürümü (düzeltme akışı) Aşama 8.3'te.
+
+**Gönderim (K07).** `satir_gonder(okuma_id, satirlar)` tek paketi `ACIK`
+okumaya yazar: `SatirGirdisi(satir_anahtari, konum, ham, durum)`. Paket önce
+baştan sona doğrulanır; tek satırda bile biçim hatası varsa (boş ya da 128
+karakteri aşan anahtar, pakette aynı anahtar iki kez, negatif ya da tam sayı
+olmayan konum, boş ya da JSON'a çevrilemeyen ya da 4.096 karakteri aşan ham,
+gönderilemez durum) hiçbir satır yazılmaz, hata satırın konumunu söyler
+(S11). Sınırlar (C18): 500 satır, 2 MiB. Aynı okumada aynı satır anahtarı
+aynı içerikle yeniden gelirse tekrar gönderimdir, satır `zaten_mevcut`
+listesine girer; içerik farklıysa `ANAHTAR_ICERIK_CAKISMASI` ve paket
+bütünüyle düşer. Satır durumu 4.5'te gönderimle gelir: `YAZILDI` ya da
+`KAPSAM_DISI` (başlık/bilgi satırı). **Karar notu:** C08'de kabul ile kayıt
+arasında ara satır durumu yok; 4.6'da `hareket_yaz` aynı gönderimde kayıt ve
+etkiyi üretip `YAZILDI` yazacak. Ara durum gerekirse listeye Abdüllatif'in
+onayıyla eklenir.
+
+**Tamamlama ve belge kaydı (K19, C07).** `okuma_tamamla(okuma_id, tamlik)`
+Cowork'un "bitti" bildirimidir: okuma `TAMAMLANDI`, belge `HAZIR`, ardından
+**uygulama** belge kaydını tanımlar (aktör `UYGULAMA`): belge `KAYITLI`,
+`etkin_okuma_id` bu okuma; ek onay yok. Koşullar: her satır sonuçlanmış
+(`YAZILDI`, `MEVCUDA_BAGLANDI`, `KAPSAM_DISI`; aksi `BELGE_HAZIR_DEGIL`) ve
+tamlıkta beklenen satır sayısı verildiyse yazılan satır sayısıyla aynı (aksi
+`MUTABAKAT_FARKI`). Koşul sağlanmazsa hiçbir durum değişmez: okuma `ACIK`
+kalır, eksik satır gönderilip yeniden tamamlanır. Bu teslimde mutabakat
+yalnız satır sayısıdır; bakiye ve toplam alanları saklanır, etkilerle
+karşılaştırma 4.6'da `hesaplamalar` gelince eklenir; açık şüphe koşulu
+Aşama 7'de. `belge_kaydet(belge_id, gorulen_surum)` `HAZIR` kalmış belgeyi
+(Aşama 7'de karar sonrası) koşulları yeniden denetleyerek `KAYITLI` yapar;
+sürüm uyuşmazsa `HEDEF_SURUMU_DEGISTI`. Belge sürümü her durum
+değişiminde bir artar (ARSIVLENDI 1 → OKUNUYOR 2 → HAZIR 3 → KAYITLI 4).
+
+Her yazma işlevi işlem anahtarı ister, denetim olayı yazar, commit yapmaz.
+Denetim izi: `belge_al`, `okuma_baslat`, `satir_gonder`, `okuma_tamamla`,
+`belge_hazir`, `belge_kaydet`.
+
+Test (`tests/test_arsiv.py`): içerik adresli atomik taşıma ve geçici dosya
+kalmaması; aynı içerik ikinci dosya üretmez; parçalı okuma ve özet; sınır
+aşımı ve kopya ortasında hata sonrası yarım kopya yok; boş dosya; MIME
+imzadan/uzantıdan; uzantı-içerik uyuşmazlığı; 3.3 yol kuralları (göreli,
+`..`, olmayan, dizin dışı, dizin, dışarıya ve içeriye simgesel bağlantı;
+bağlantı testleri Windows'ta yetki yoksa atlanır).
+Test (`tests/test_belgeler.py`): uçtan uca ARSIVLENDI → KAYITLI (durumlar,
+sürümler, etkin okuma, satırlar, denetim izi, kaydı uygulama tanımlar); aynı
+dosya iki kez tek belge; aynı anahtar saklı sonuç / farklı dosya çakışma;
+farklı içerik ayrı belge; veritabanı düşerse dosya arşivde belge yok; izinsiz
+yol; S10 (belgesiz okuma, arşiv dosyası silinmiş, olmayan okumaya satır);
+ikinci okuma açılmaz; şema sürümü ve tamlık doğrulama (negatif bakiye
+kabul); S11 on biçim hatası paketin tamamını düşürür; boş ve 501 satırlık
+paket; tekrar gönderim mevcut/çakışma; aynı işlem anahtarı; kapalı okumaya
+satır; mutabakat farkı hiçbir durumu değiştirmez ve eksik satırla tamamlanır;
+tamamlarken tamlık; tamlıksız sıfır satır; yeniden tamamlama; hata her şeyi
+geri alır; `belge_kaydet` HAZIR → KAYITLI, eski sürüm, hazır olmayan belge;
+sonuçlanmamış satır kaydı engeller.
+
 ## Teknik hata günlüğü
 
 Günlük yalnızca ayarlardaki log dizinine yazar: `<log dizini>/defteriki.log`
@@ -458,6 +555,8 @@ src/defteriki/    uygulama paketi
   denetim.py      denetim olayı yazımı
   onaylar.py      onay talebi: oluştur, listele, karar uygula (yalnız ekran)
   nesneler.py     nesne tanıtma (FORM/GONDER), seviye, şart seçimi etkisi, bulma
+  arsiv.py        gelen dizini denetimi, akışla kopya ve SHA-256, atomik taşıma
+  belgeler.py     belge alma/tanımlama, okuma, satır gönderimi, tamamlama, belge kaydı
 migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
