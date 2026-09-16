@@ -23,10 +23,11 @@ Belge durumları bu teslimde ``ARSIVLENDI → OKUNUYOR → HAZIR → KAYITLI``
 Aşama 7 ve 8'de yazılır; bu yüzden okuma yalnız ``ARSIVLENDI`` belgede
 başlatılır (sürüm 1) ve yeni okuma sürümü henüz açılmaz.
 
-Satır durumu 4.5'te gönderimle gelir (``YAZILDI`` ya da ``KAPSAM_DISI``).
-Kayıt ve etki üretimi 4.6'da ``kayitlar.hareket_yaz`` ile gelir; C08 listesinde
-kabul ile kayıt arasında ara durum yoktur, bu yüzden 4.5 gönderimi satırı
-doğrudan sonuç durumuyla yazar. Tamlıktaki bakiye ve toplam alanları
+Satır durumu gönderimle gelir (``YAZILDI`` ya da ``KAPSAM_DISI``). Finansal
+satır için kayıt, etki ve kaynak bağını ``kayitlar.hareket_yaz`` aynı
+gönderimde üretir ve satırı ``YAZILDI`` yazar; ``satir_gonder`` kayıtsız
+satır (başlık, bilgi) içindir. C08 listesinde kabul ile kayıt arasında ara
+durum yoktur. Tamlıktaki bakiye ve toplam alanları
 saklanır; etki toplamlarıyla karşılaştırma 4.6'da ``hesaplamalar`` gelince
 eklenir. Bu teslimde mutabakat = beklenen satır sayısı ile yazılan satır
 sayısı.
@@ -470,60 +471,7 @@ def satir_gonder(
     istek = {"okuma_id": okuma_id, "satirlar": [asdict(h) for h in hazir]}
 
     def yaz(islem_id: int) -> islem_anahtarlari.Sonuc:
-        okuma = okuma_getir(oturum, okuma_id)
-        if okuma.durum is not sz.OkumaDurumu.ACIK:
-            raise sz.GirdiGecersiz(
-                f"okuma satır kabul etmiyor (durum {okuma.durum.value})",
-                alan="okuma_id",
-            )
-        mevcutlar = {
-            str(m.satir_anahtari): m
-            for m in oturum.execute(
-                select(sema.okuma_satir).where(
-                    sema.okuma_satir.c.okuma_id == okuma_id,
-                    sema.okuma_satir.c.satir_anahtari.in_(
-                        [h.satir_anahtari for h in hazir]
-                    ),
-                )
-            ).all()
-        }
-        yeni: list[dict[str, Any]] = []
-        mevcut_idleri: list[int] = []
-        for konum, h in enumerate(hazir):
-            mevcut = mevcutlar.get(h.satir_anahtari)
-            if mevcut is None:
-                yeni.append(
-                    {
-                        "okuma_id": okuma_id,
-                        "satir_anahtari": h.satir_anahtari,
-                        "konum": h.konum,
-                        "ham": h.ham,
-                        "durum": h.durum,
-                        "aday_grup_id": None,
-                    }
-                )
-                continue
-            ayni = (
-                int(mevcut.konum) == h.konum
-                and str(mevcut.durum) == h.durum
-                and _kanonik(mevcut.ham) == _kanonik(h.ham)
-            )
-            if not ayni:
-                raise sz.AnahtarIcerikCakismasi(
-                    "aynı okumada aynı satır anahtarı farklı içerikle yazılmış; "
-                    "düzeltme için yeni okuma sürümü gerekir",
-                    alan="satir_anahtari",
-                    konum=konum,
-                )
-            mevcut_idleri.append(int(mevcut.id))
-        yazilan_idleri: list[int] = []
-        if yeni:
-            yazilan_idleri = [
-                int(k)
-                for k in oturum.execute(
-                    sema.okuma_satir.insert().returning(sema.okuma_satir.c.id), yeni
-                ).scalars()
-            ]
+        yazilan_idleri, mevcut_idleri = _satirlari_kabul_et(oturum, okuma_id, hazir)
         denetim.olay_yaz(
             oturum,
             aktor=aktor,
@@ -545,8 +493,8 @@ def satir_gonder(
     )
     return GonderimSonucu(
         okuma=okuma_getir(oturum, okuma_id),
-        yazilan=_satirlari_getir(oturum, [int(k) for k in sonuc["yazilan_idleri"]]),
-        zaten_mevcut=_satirlari_getir(oturum, [int(k) for k in sonuc["mevcut_idleri"]]),
+        yazilan=satirlari_getir(oturum, [int(k) for k in sonuc["yazilan_idleri"]]),
+        zaten_mevcut=satirlari_getir(oturum, [int(k) for k in sonuc["mevcut_idleri"]]),
     )
 
 
@@ -770,6 +718,90 @@ def _belge_durumunu_degistir(
     return belge_getir(oturum, belge.id).belge
 
 
+# --- satır kabulü (çekirdek) ------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class KabulSonucu:
+    yazilan_idleri: tuple[int, ...]
+    mevcut_idleri: tuple[int, ...]
+
+
+def satirlari_kabul_et(
+    oturum: Session, *, okuma_id: int, satirlar: Sequence[SatirGirdisi]
+) -> KabulSonucu:
+    """Gönderim çekirdeği: paket doğrulanır ve ``ACIK`` okumaya yazılır (K07).
+
+    İşlem anahtarı ve denetim olayı çağıranındır (``satir_gonder`` ya da
+    ``kayitlar.hareket_yaz``); bu işlev yalnız satırları yazar. Aynı anahtar
+    aynı içerikle varsa kimliği ``mevcut_idleri``ne girer, farklı içerik
+    ``ANAHTAR_ICERIK_CAKISMASI``.
+    """
+    hazir = _satirlari_dogrula(satirlar)
+    yazilan, mevcut = _satirlari_kabul_et(oturum, okuma_id, hazir)
+    return KabulSonucu(tuple(yazilan), tuple(mevcut))
+
+
+def _satirlari_kabul_et(
+    oturum: Session, okuma_id: int, hazir: Sequence[_HazirSatir]
+) -> tuple[list[int], list[int]]:
+    okuma = okuma_getir(oturum, okuma_id)
+    if okuma.durum is not sz.OkumaDurumu.ACIK:
+        raise sz.GirdiGecersiz(
+            f"okuma satır kabul etmiyor (durum {okuma.durum.value})",
+            alan="okuma_id",
+        )
+    mevcutlar = {
+        str(m.satir_anahtari): m
+        for m in oturum.execute(
+            select(sema.okuma_satir).where(
+                sema.okuma_satir.c.okuma_id == okuma_id,
+                sema.okuma_satir.c.satir_anahtari.in_(
+                    [h.satir_anahtari for h in hazir]
+                ),
+            )
+        ).all()
+    }
+    yeni: list[dict[str, Any]] = []
+    mevcut_idleri: list[int] = []
+    for konum, h in enumerate(hazir):
+        mevcut = mevcutlar.get(h.satir_anahtari)
+        if mevcut is None:
+            yeni.append(
+                {
+                    "okuma_id": okuma_id,
+                    "satir_anahtari": h.satir_anahtari,
+                    "konum": h.konum,
+                    "ham": h.ham,
+                    "durum": h.durum,
+                    "aday_grup_id": None,
+                }
+            )
+            continue
+        ayni = (
+            int(mevcut.konum) == h.konum
+            and str(mevcut.durum) == h.durum
+            and _kanonik(mevcut.ham) == _kanonik(h.ham)
+        )
+        if not ayni:
+            raise sz.AnahtarIcerikCakismasi(
+                "aynı okumada aynı satır anahtarı farklı içerikle yazılmış; "
+                "düzeltme için yeni okuma sürümü gerekir",
+                alan="satir_anahtari",
+                konum=konum,
+            )
+        mevcut_idleri.append(int(mevcut.id))
+    yazilan_idleri: list[int] = []
+    if yeni:
+        yazilan_idleri = [
+            int(k)
+            for k in oturum.execute(
+                sema.okuma_satir.insert().returning(sema.okuma_satir.c.id), yeni
+            ).scalars()
+        ]
+    return yazilan_idleri, mevcut_idleri
+
+
 # --- doğrulama -------------------------------------------------------------------
 
 
@@ -907,7 +939,7 @@ def _kanonik(deger: Any) -> str:
 # --- satır dönüştürücüler ------------------------------------------------------
 
 
-def _satirlari_getir(oturum: Session, idler: Sequence[int]) -> tuple[OkumaSatiri, ...]:
+def satirlari_getir(oturum: Session, idler: Sequence[int]) -> tuple[OkumaSatiri, ...]:
     if not idler:
         return ()
     satirlar = oturum.execute(

@@ -7,8 +7,8 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.5 bitti, 4.6 (tek işlem türü
-ve etkin bakiye) sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
+(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.6 bitti, Aşama 4 kapısı
+(uçtan uca test, şemanın başlangıç akışına bağlanması) sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
 defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 4.3 buna göre yeniden kuruldu. Bitenler:
 
@@ -39,8 +39,12 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   atomik kopya, belge tanımlama (aynı dosya tek belge), okuma, atomik satır
   gönderimi, okuma tamamlama ve uygulamanın tanımladığı belge kaydı
   (`arsiv.py`, `belgeler.py`)
+* Tek işlem türü ve etkin bakiye: `HESAP_HAREKETI` sözleşmesi (saf
+  doğrulama), hareket yazma (kaynak satırı zorunlu, aynı anahtar tek etki),
+  yalnız `KAYITLI` belgeye dayanan bakiye ve hareket listesi
+  (`finansal_kurallar.py`, `kayitlar.py`, `hesaplamalar.py`)
 
-Henüz yok: hareket yazma ve bakiye (4.6), mükerrerlik karşılaştırması
+Henüz yok: diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması
 (Aşama 7), GUI, ürün verisi yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
 defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
 `uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
@@ -430,11 +434,13 @@ gönderilemez durum) hiçbir satır yazılmaz, hata satırın konumunu söyler
 (S11). Sınırlar (C18): 500 satır, 2 MiB. Aynı okumada aynı satır anahtarı
 aynı içerikle yeniden gelirse tekrar gönderimdir, satır `zaten_mevcut`
 listesine girer; içerik farklıysa `ANAHTAR_ICERIK_CAKISMASI` ve paket
-bütünüyle düşer. Satır durumu 4.5'te gönderimle gelir: `YAZILDI` ya da
-`KAPSAM_DISI` (başlık/bilgi satırı). **Karar notu:** C08'de kabul ile kayıt
-arasında ara satır durumu yok; 4.6'da `hareket_yaz` aynı gönderimde kayıt ve
-etkiyi üretip `YAZILDI` yazacak. Ara durum gerekirse listeye Abdüllatif'in
-onayıyla eklenir.
+bütünüyle düşer. Satır durumu gönderimle gelir: `YAZILDI` ya da
+`KAPSAM_DISI` (başlık/bilgi satırı). Finansal satır için `satir_gonder`
+değil `kayitlar.hareket_yaz` kullanılır: satırı aynı gönderimde kabul eder
+(`satirlari_kabul_et` çekirdeği ortak), kayıt ve etkiyi üretir, `YAZILDI`
+yazar. `satir_gonder` kayıtsız satırlar (başlık, bilgi) içindir. **Karar
+notu:** C08'de kabul ile kayıt arasında ara satır durumu yok; gerekirse
+listeye Abdüllatif'in onayıyla eklenir.
 
 **Tamamlama ve belge kaydı (K19, C07).** `okuma_tamamla(okuma_id, tamlik)`
 Cowork'un "bitti" bildirimidir: okuma `TAMAMLANDI`, belge `HAZIR`, ardından
@@ -478,6 +484,73 @@ geri alır; `belge_kaydet` HAZIR → KAYITLI, eski sürüm, hazır olmayan belge
 sonuçlanmamış satır kaydı engeller; dört ayrı süreç aynı içeriği farklı
 adlarla aynı anda getirir → arşivde tek dosya, tek `arsiv_dosya`, tek belge,
 dört işlem anahtarı, geçici dosya yok.
+
+## Hareket yazma ve etkin bakiye
+
+Teslim 4.6 (`src/defteriki/finansal_kurallar.py`, `kayitlar.py`,
+`hesaplamalar.py`). Ekran ve MCP aracı yok; işlev ve test düzeyi.
+
+**Sözleşme (C02).** Finansal davranış nesne türüyle değil işlem
+sözleşmesiyle belirlenir. Bu teslimde tek sözleşme: `HESAP_HAREKETI`, yani
+belirlenen nesnede `VARLIK` ekseninde `ARTTIR` ya da `AZALT`; gelen para
+gelir, çıkan para gider sayılmaz (gider anlamı Aşama 8'in sözleşmeleriyle).
+`finansal_kurallar.hesap_hareketi_dogrula(HesapHareketi)` saf işlevdir,
+veritabanına dokunmaz: nesne kimliği katı, yön `ARTTIR`/`AZALT`, tutar kuruş
+cinsinden pozitif tam sayı (S20: `float`, `bool`, metin, `Decimal`, sıfır ve
+64 bit taşma açık ret, sessiz yuvarlama yok), para birimi yalnız TRY, işlem
+tarihi zorunlu ve valör isteğe bağlı (`date` ya da `YYYY-AA-GG`; `datetime`
+reddedilir), açıklama en çok 512 karakter. Çıktı `HareketTaslagi`: kayıt
+alanları + tek `VARLIK` etkisi.
+
+**Yazma (`kayitlar.hareket_yaz`).** Sözlükteki anlamıyla *yazmaktır*, kayıt
+etmek değil. `hareket_yaz(okuma_id, satir, hareket, islem_anahtari, aktor)`
+satırı aynı gönderimde kabul eder (`belgeler.satirlari_kabul_et`; biçim
+hatası paketi düşürür, K07), nesnenin `AKTIF` olduğunu denetler
+(`ONAY_BEKLIYOR`/`PASIF`/`SILINDI` ret, `ENGELLI` → `NESNE_ENGELLI`), tek
+işlemde `kayit` (AKTIF) + `etki` + `kayit_kaynak` (ASIL, AKTIF) yazar ve
+denetim olayı düşer. Kaynak satırı zorunludur (K06, S10): okumasız, olmayan
+ya da kapalı okumaya hareket yazılmaz; `KAPSAM_DISI` satıra hareket
+bağlanmaz. İşlem anahtarı zorunlu (K08, S18 tek süreç): aynı anahtar aynı
+içerik saklı sonuç, tek etki; farklı içerik `ANAHTAR_ICERIK_CAKISMASI`.
+Aynı satır anahtarı başka işlem anahtarıyla yeniden gelirse (Tam Plan
+8.5.1): hareket mevcut kayıtla aynıysa tekrar gönderim, mevcut kayıt döner;
+tutar, yön ya da para birimi farklıysa `KAYNAK_CAKISMASI`. Kaydı olmayan
+mevcut satıra (4.5 `satir_gonder` ile yazılmış) kayıt bağlanır. Hareket
+mükerrerliği karşılaştırması (referans, tarih + tutar + yön) Aşama 8.2'de.
+
+**Etkin bakiye (`hesaplamalar`).** Tam Plan 10.3: `etkin(etki)` = en az bir
+KAYITLI ve geçerli kaynak desteği. `etkin_bakiye(nesne_id, eksen,
+para_birimi, tarih)` yalnız etkin etkileri toplar: kaynak bağı `AKTIF`,
+kaynak satırının okuması belgenin etkin okuması (`belge.etkin_okuma_id`),
+belge `KAYITLI`, kayıt `AKTIF`; tarih sınırı dahil; ARTTIR − AZALT. Her
+etkinin desteği `EXISTS` ile seçilir, her etki bir kez toplanır (çifte
+toplama engeli, 8.5.5). Yazılmış ama belgesi henüz `KAYITLI` olmayan
+kayıtlar `bekleyen_kayit_sayisi` olarak ayrıca sayılır, bakiyeye girmez
+(K19). `hareketleri_listele(nesne_id, eksen, baslangic, bitis, sayfalama)`
+tarih ve kimlik sırasıyla döner; her satırda `kayitli` bayrağı (yazılmış /
+kayıtlı ayrımı). Toplamlar SQL'de; GUI ve MCP aynı işlevi çağıracak.
+
+Test (`tests/test_finansal_kurallar.py`): geçerli hareket tek VARLIK
+etkisi; tarih metin, valör ve açıklama isteğe bağlı; S20 tutar reddi
+(`12.0`, `12.5`, `True`, `False`, `"100"`, `"12,50"`, `Decimal`, `None`,
+`-1`, `0`), taşma sınırı; Hypothesis: pozitif tam sayı her zaman kabul,
+sıfır/negatif/taşma ve float/bool her zaman ret; kimlik, yön, para birimi,
+tarih biçimi, açıklama; saf işlev veritabanına dokunmaz.
+Test (`tests/test_kayitlar.py`): kayıt + etki + kaynak + satır tek işlemde,
+denetim olayı; S18 aynı anahtar iki kez tek etki, farklı içerik çakışma;
+aynı satır farklı anahtar aynı hareket tekrar gönderim; aynı satıra farklı
+tutar/yön `KAYNAK_CAKISMASI`; aynı satır anahtarı farklı ham paket düşer;
+kaydı olmayan mevcut satıra kayıt bağlanır; S10 olmayan ve kapalı okuma;
+`KAPSAM_DISI` satır; biçim hatalı satır hareketi de düşürür; geçersiz tutar
+veritabanına dokunmadan ret; onay bekleyen, engelli ve olmayan nesne; hata
+her şeyi geri alır; uçtan uca hareketli belge `KAYITLI`.
+Test (`tests/test_hesaplamalar.py`): boş hesap sıfır; yazılmış ama kayıtsız
+belge bakiyeye girmez, `KAYITLI` olunca girer (bekleyen sayısı ve `kayitli`
+bayrağı); iki belge ayrı ayrı kayıtlı olur, tarih sınırı; başka nesne ve
+başka eksen karışmaz; `GECERSIZ` kayıt, kaldırılmış kaynak desteği ve
+`GECERSIZ` belge toplanmaz; etkin olmayan okuma sürümü sayılmaz; hareket
+listesi sıralı, filtreli, sayfalı; Hypothesis: rastgele ARTTIR/AZALT dizisi
+için kayıt öncesi bakiye 0, sonrası ARTTIR − AZALT, bekleyen sayısı geçişi.
 
 ## Teknik hata günlüğü
 
@@ -576,6 +649,9 @@ src/defteriki/    uygulama paketi
   nesneler.py     nesne tanıtma (FORM/GONDER), seviye, şart seçimi etkisi, bulma
   arsiv.py        gelen dizini denetimi, akışla kopya ve SHA-256, atomik taşıma
   belgeler.py     belge alma/tanımlama, okuma, satır gönderimi, tamamlama, belge kaydı
+  finansal_kurallar.py  işlem sözleşmeleri (yalnız HESAP_HAREKETI), saf doğrulama
+  kayitlar.py     hareket yazma: kayıt + etki + kaynak bağı, tek işlem
+  hesaplamalar.py etkin bakiye (yalnız KAYITLI belge, EXISTS), hareket listesi
 migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
