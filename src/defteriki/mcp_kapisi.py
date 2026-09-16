@@ -3,8 +3,9 @@
 Cowork'un DEFTERIKI'ye ulaştığı tek kapı. ``uv run defteriki-mcp`` bu modülün
 ``main`` fonksiyonunu çalıştırır; sunucu stdio taşımasıyla konuşur.
 
-Aşama 3 kapsamı: tek araç ``sistem_durumu``. Ürün verisi yazılmaz, veritabanı
-açılmaz.
+Bu sürümde tek araç: ``sistem_durumu``. Ürün verisi yazan araç yoktur (Aşama
+5). Başlangıçta ``ortami_hazirla`` şemayı kurar ya da denetler; araç yanıtı
+gerçek şema sürümünü taşır.
 
 Kurallar:
 
@@ -42,7 +43,6 @@ PAKET_ADI = "defteriki"
 KUTUPHANE_GUNLUK_ADI = "mcp"
 
 ARAC_SISTEM_DURUMU = "sistem_durumu"
-SEMA_SURUMU_YOK = "yok"
 SURUM_BILINMIYOR = "bilinmiyor"
 
 OLAY_MCP_BASLANGIC = "mcp_baslangic"
@@ -73,7 +73,7 @@ class SistemDurumu:
     uygulama_surumu: str
     ortam: str
     sema_surumu: str
-    """Veritabanı şema sürümü; henüz veritabanı olmadığından ``yok``."""
+    """Başlangıçta kurulan ya da denetlenen veritabanı şema sürümü."""
     yetenekler: list[str]
     """Bu sunucunun sunduğu araç adları."""
 
@@ -86,12 +86,12 @@ def uygulama_surumu() -> str:
         return SURUM_BILINMIYOR
 
 
-def sistem_durumu(ayarlar: Ayarlar) -> SistemDurumu:
+def sistem_durumu(ayarlar: Ayarlar, sema_surumu: str) -> SistemDurumu:
     """Uygulamanın durumunu döndürür; yol ya da sır içermez."""
     return SistemDurumu(
         uygulama_surumu=uygulama_surumu(),
         ortam=ayarlar.ortam.value,
-        sema_surumu=SEMA_SURUMU_YOK,
+        sema_surumu=sema_surumu,
         yetenekler=[ARAC_SISTEM_DURUMU],
     )
 
@@ -125,7 +125,7 @@ def el_sikisma_ozeti(baglam: Context[Any, Any]) -> str:
     )
 
 
-def sunucu_kur(ayarlar: Ayarlar) -> MCPServer[None]:
+def sunucu_kur(ayarlar: Ayarlar, sema_surumu: str) -> MCPServer[None]:
     """MCP sunucusunu ve araçlarını kurar; henüz çalıştırmaz."""
     sunucu: MCPServer[None] = MCPServer(
         name=SUNUCU_ADI,
@@ -136,7 +136,7 @@ def sunucu_kur(ayarlar: Ayarlar) -> MCPServer[None]:
     @sunucu.tool(name=ARAC_SISTEM_DURUMU, description=ARAC_SISTEM_DURUMU_ACIKLAMASI)
     def sistem_durumu_araci(baglam: Context[Any, Any]) -> SistemDurumu:
         gunluk.olay_kaydet(OLAY_MCP_EL_SIKISMA, el_sikisma_ozeti(baglam))
-        return sistem_durumu(ayarlar)
+        return sistem_durumu(ayarlar, sema_surumu)
 
     return sunucu
 
@@ -144,17 +144,19 @@ def sunucu_kur(ayarlar: Ayarlar) -> MCPServer[None]:
 def main() -> int:
     """MCP kapısını stdio üzerinde çalıştırır; çıkış kodunu döndürür."""
     try:
-        ayarlar, _ = ortami_hazirla()
+        hazirlik = ortami_hazirla()
     except BaslangicHatasi as hata:
         _hata_yaz(str(hata))
         return CIKIS_HATALI
 
+    ayarlar = hazirlik.ayarlar
     try:
         gunluk.kutuphane_gunlugunu_yonlendir(KUTUPHANE_GUNLUK_ADI)
-        sunucu = sunucu_kur(ayarlar)
+        sunucu = sunucu_kur(ayarlar, hazirlik.sema_surumu)
         gunluk.olay_kaydet(
             OLAY_MCP_BASLANGIC,
-            f"ortam={ayarlar.ortam.value} surum={uygulama_surumu()} tasima=stdio",
+            f"ortam={ayarlar.ortam.value} surum={uygulama_surumu()} "
+            f"sema={hazirlik.sema_surumu} tasima=stdio",
         )
         sunucu.run(transport="stdio")
     except Exception as hata:

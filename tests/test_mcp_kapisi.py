@@ -21,7 +21,7 @@ import anyio
 import pytest
 
 from defteriki import ayarlar as ay
-from defteriki import gunluk, mcp_kapisi
+from defteriki import gunluk, mcp_kapisi, sema
 
 DEFTERIKI_DEGISKENLERI = (
     ay.ORTAM_DEGISKENI,
@@ -77,16 +77,16 @@ def test_koku(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_sistem_durumu_beklenen_alanlari_tasir(test_koku: Path) -> None:
-    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle())
+    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), "0001")
 
     assert durum.ortam == "test"
-    assert durum.sema_surumu == mcp_kapisi.SEMA_SURUMU_YOK
+    assert durum.sema_surumu == "0001"
     assert durum.yetenekler == [mcp_kapisi.ARAC_SISTEM_DURUMU]
     assert durum.uygulama_surumu not in ("", mcp_kapisi.SURUM_BILINMIYOR)
 
 
 def test_sistem_durumu_yol_ve_ortam_degiskeni_icermez(test_koku: Path) -> None:
-    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle())
+    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), "0001")
 
     metin = json.dumps(dataclasses.asdict(durum), ensure_ascii=False)
 
@@ -96,7 +96,7 @@ def test_sistem_durumu_yol_ve_ortam_degiskeni_icermez(test_koku: Path) -> None:
 
 
 def test_sunucu_yalniz_sistem_durumu_aracini_sunar(test_koku: Path) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ay.ayarlari_yukle())
+    sunucu = mcp_kapisi.sunucu_kur(ay.ayarlari_yukle(), "0001")
 
     araclar = anyio.run(sunucu.list_tools)
 
@@ -233,7 +233,7 @@ def test_stdio_uzerinden_baslatma_arac_listesi_ve_cagri(
     assert cagri["structuredContent"] == {
         "uygulama_surumu": mcp_kapisi.uygulama_surumu(),
         "ortam": "test",
-        "sema_surumu": mcp_kapisi.SEMA_SURUMU_YOK,
+        "sema_surumu": sema.BEKLENEN_SEMA_SURUMU,
         "yetenekler": [mcp_kapisi.ARAC_SISTEM_DURUMU],
     }
     assert all(str(test_koku) not in satir for satir in sonuc.stdout_satirlari)

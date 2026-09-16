@@ -11,9 +11,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 from defteriki import ayarlar as ay
-from defteriki import baslangic, gunluk
+from defteriki import baslangic, gunluk, sema
+from defteriki import veritabani as vt
 
 DEFTERIKI_DEGISKENLERI = (
     ay.ORTAM_DEGISKENI,
@@ -62,23 +64,70 @@ def test_basarili_baslangic_sifir_doner_ve_mesaj_verir(
     assert str(test_koku) in cikti.out
 
 
-def test_basarili_baslangic_dizinleri_hazirlar_ve_olay_yazar(test_koku: Path) -> None:
+def test_basarili_baslangic_dizinleri_hazirlar_semayi_kurar_olay_yazar(
+    test_koku: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     baslangic.main()
 
     assert (test_koku / ay.BELGE_DIZIN_ADI).is_dir()
     assert (test_koku / ay.LOG_DIZIN_ADI).is_dir()
-    assert not (test_koku / ay.VERITABANI_DOSYA_ADI).exists()
-    (satir,) = _log_satirlari(test_koku)
-    assert f"| INFO | {baslangic.OLAY_BASLANGIC} | ortam=test" in satir
+    assert (test_koku / ay.VERITABANI_DOSYA_ADI).is_file()
+    assert f"Şema: {sema.BEKLENEN_SEMA_SURUMU}" in capsys.readouterr().out
+    kurulum, giris = _log_satirlari(test_koku)
+    assert f"| INFO | {baslangic.OLAY_SEMA_KURULDU} | surum=0001" in kurulum
+    assert f"| INFO | {baslangic.OLAY_BASLANGIC} | ortam=test" in giris
+    assert "sema=0001" in giris
+
+    db = vt.Veritabani(test_koku / ay.VERITABANI_DOSYA_ADI)
+    try:
+        assert sema.sema_surumu(db) == sema.BEKLENEN_SEMA_SURUMU
+        assert sorted(sema.TABLOLAR) == sorted(_tablolar(db))
+    finally:
+        db.kapat()
 
 
-def test_tekrar_baslatma_her_seferinde_tek_satir_ekler(test_koku: Path) -> None:
+def _tablolar(db: vt.Veritabani) -> list[str]:
+    with db.okuma_islemi() as oturum:
+        adlar = oturum.execute(
+            text(
+                "SELECT name FROM sqlite_master WHERE type = 'table' "
+                "AND name NOT IN ('alembic_version', 'sqlite_sequence')"
+            )
+        ).scalars()
+        return [str(ad) for ad in adlar]
+
+
+def test_tekrar_baslatma_semayi_yeniden_kurmaz(test_koku: Path) -> None:
     assert baslangic.main() == 0
     assert baslangic.main() == 0
 
     satirlar = _log_satirlari(test_koku)
-    assert len(satirlar) == 2
-    assert all(baslangic.OLAY_BASLANGIC in satir for satir in satirlar)
+    assert len(satirlar) == 3  # kurulum + iki giriş
+    assert sum(baslangic.OLAY_SEMA_KURULDU in s for s in satirlar) == 1
+    assert sum(baslangic.OLAY_BASLANGIC in s for s in satirlar) == 2
+
+
+def test_yabanci_sema_surumune_baslanmaz(
+    test_koku: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eski ya da yabancı şemaya yazılmaz; yükseltme açık adımdır."""
+    assert baslangic.main() == 0
+    db = vt.Veritabani(test_koku / ay.VERITABANI_DOSYA_ADI)
+    try:
+        with db.yazma_islemi() as oturum:
+            oturum.execute(text("UPDATE alembic_version SET version_num = '0000'"))
+    finally:
+        db.kapat()
+    capsys.readouterr()
+
+    kod = baslangic.main()
+
+    cikti = capsys.readouterr()
+    assert kod == 1
+    assert cikti.out == ""
+    assert "Şema hatası" in cikti.err and "0000" in cikti.err
+    assert "yedek" in cikti.err
+    assert sum(baslangic.OLAY_BASLANGIC in s for s in _log_satirlari(test_koku)) == 1
 
 
 def test_farkli_calisma_dizinlerinden_ayni_yollar(
@@ -103,7 +152,7 @@ def test_farkli_calisma_dizinlerinden_ayni_yollar(
     assert str(test_koku) in cikti_1
     assert not any(birinci.iterdir())
     assert not any(ikinci.iterdir())
-    assert len(_log_satirlari(test_koku)) == 2
+    assert len(_log_satirlari(test_koku)) == 3  # kurulum + iki giriş
 
 
 # --- başarısız başlangıç ---------------------------------------------------
@@ -162,7 +211,7 @@ def test_beklenmeyen_hata_gunluge_yalniz_turuyle_gecer(
 ) -> None:
     hassas = "IBAN TR00 0000 0000 0000 0000 0000 00 KISI ALFA"
 
-    def patlat(ayarlar: ay.Ayarlar, log_dosyasi: Path) -> None:
+    def patlat(hazirlik: baslangic.Hazirlik) -> None:
         raise RuntimeError(hassas)
 
     monkeypatch.setattr(baslangic, "_basariyi_bildir", patlat)
