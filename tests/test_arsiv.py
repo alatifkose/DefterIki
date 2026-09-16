@@ -65,7 +65,9 @@ def test_dosya_icerik_adresli_yola_atomik_tasinir(gelen: Path, belgeler: Path) -
         sha256=beklenen,
         boyut=len(PDF),
         mime="application/pdf",
-        goreli_yol=f"{beklenen[:2]}/{beklenen}.pdf",
+        uzanti=".pdf",
+        kaynak_adi="Ekstre.PDF",
+        goreli_yol=f"{beklenen[:2]}/{beklenen}",
         diskte_zaten_vardi=False,
     )
     assert arsiv.arsiv_yolu(belgeler, sonuc.goreli_yol).read_bytes() == PDF
@@ -74,12 +76,49 @@ def test_dosya_icerik_adresli_yola_atomik_tasinir(gelen: Path, belgeler: Path) -
     assert arsiv.arsivde_var_mi(belgeler, sonuc.goreli_yol, sonuc.boyut)
 
 
-def test_ayni_icerik_ikinci_dosya_uretmez(gelen: Path, belgeler: Path) -> None:
-    ilk = _arsivle(_yaz(gelen / "a.pdf", PDF), gelen, belgeler)
-    ikinci = _arsivle(_yaz(gelen / "alt" / "b.pdf", PDF), gelen, belgeler)
+METIN = b"tarih;aciklama;tutar\n2026-08-01;sentetik;100\n"
+
+
+@pytest.mark.parametrize(
+    ("icerik", "ilk_ad", "ikinci_ad"),
+    [
+        (PDF, "a.pdf", "alt/b.pdf"),  # farklı ad, aynı uzantı
+        (PDF, "a.pdf", "a.pdf"),  # aynı ad (gelen dizininde üzerine yazıldı)
+        (PDF, "a.pdf", "ekstre"),  # uzantısız
+        (PDF, "ekstre", "a.pdf"),  # önce uzantısız, sonra uzantılı
+        (
+            METIN,
+            "hareketler.csv",
+            "hareketler.xyz",
+        ),  # imzasız içerik, bilinmeyen uzantı
+        (METIN, "hareketler.csv", "hareketler"),  # imzasız içerik, uzantısız
+        (METIN, "hareketler.xyz", "hareketler.txt"),  # bilinmeyen → bilinen uzantı
+    ],
+)
+def test_ayni_icerik_hangi_adla_gelirse_gelsin_tek_fiziksel_dosya(
+    gelen: Path, belgeler: Path, icerik: bytes, ilk_ad: str, ikinci_ad: str
+) -> None:
+    """Fiziksel kimlik yalnız SHA-256: yol uzantı taşımaz, ad ve uzantı metadata'dır."""
+    ilk = _arsivle(_yaz(gelen / ilk_ad, icerik), gelen, belgeler)
+    ikinci = _arsivle(_yaz(gelen / ikinci_ad, icerik), gelen, belgeler)
 
     assert ikinci.sha256 == ilk.sha256 and ikinci.goreli_yol == ilk.goreli_yol
     assert ikinci.diskte_zaten_vardi is True
+    assert ikinci.kaynak_adi == Path(ikinci_ad).name
+    assert ikinci.uzanti == Path(ikinci_ad).suffix.lower()
+    assert _dosyalar(belgeler) == {ilk.goreli_yol}
+    assert ilk.goreli_yol == f"{ilk.sha256[:2]}/{ilk.sha256}"
+
+
+def test_imzali_icerik_bilinmeyen_uzantiyla_kapida_reddedilir(
+    gelen: Path, belgeler: Path
+) -> None:
+    """Giriş kapısı denetimi aynen durur: PDF içerik .xyz adıyla arşive giremez."""
+    ilk = _arsivle(_yaz(gelen / "a.pdf", PDF), gelen, belgeler)
+
+    with pytest.raises(sz.GirdiGecersiz, match=arsiv.GEREKCE_UZANTI_UYUSMUYOR):
+        _arsivle(_yaz(gelen / "a.xyz", PDF), gelen, belgeler)
+
     assert _dosyalar(belgeler) == {ilk.goreli_yol}
 
 

@@ -5,6 +5,10 @@ Akış: dosya gelen dizinine → belge_al (ARSIVLENDI) → okuma_baslat (OKUNUYO
 kaydını tanımlar: KAYITLI). Sentetik içerik; gerçek belge yok.
 """
 
+import os
+import subprocess
+import sys
+import time
 from collections.abc import Iterator, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -689,3 +693,86 @@ def test_sonuclanmamis_satir_belge_kaydini_engeller(
 
     assert _okuma(db, okuma.id).durum is sz.OkumaDurumu.ACIK
     assert _belge(db, belge.id).durum is sz.BelgeDurumu.OKUNUYOR
+
+
+# --- eşzamanlı süreçler ---------------------------------------------------------------
+
+ALT_SUREC_BETIGI = """
+import sys, time
+from pathlib import Path
+from defteriki import belgeler as bl
+from defteriki import sozlesmeler as sz
+from defteriki import veritabani as vt
+
+vt_yolu, gelen, arsiv_dizini, kaynak, isaret, anahtar = sys.argv[1:7]
+son = time.monotonic() + 20
+while not Path(isaret).exists():
+    if time.monotonic() > son:
+        raise SystemExit("başlama işareti gelmedi")
+    time.sleep(0.002)
+db = vt.Veritabani(Path(vt_yolu))
+try:
+    sonuc = bl.belge_al(
+        db,
+        yol=kaynak,
+        gelen_dizini=Path(gelen),
+        belge_dizini=Path(arsiv_dizini),
+        islem_anahtari=anahtar,
+        aktor=sz.DenetimAktoru.COWORK,
+    )
+finally:
+    db.kapat()
+print(sonuc.belge.id, sonuc.dosya.id, sonuc.dosya.goreli_yol, sonuc.zaten_vardi)
+"""
+
+
+def test_es_zamanli_surecler_ayni_icerigi_tek_dosya_tek_belge_yapar(
+    db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
+) -> None:
+    """Dört süreç aynı anda aynı içeriği farklı adlarla getirir: arşivde tek
+    fiziksel dosya, veritabanında tek arşiv kaydı ve tek belge, geçici dosya yok."""
+    icerik = PDF + os.urandom(2 * arsiv.OKUMA_PARCA_BOYUTU)
+    adlar = ["a.pdf", "b.pdf", "ekstre", "kopya.pdf"]
+    kaynaklar = [_dosya_birak(gelen, ad, icerik) for ad in adlar]
+    isaret = gelen.parent / "basla"
+
+    surecler = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                ALT_SUREC_BETIGI,
+                str(db.yol),
+                str(gelen),
+                str(arsiv_dizini),
+                str(kaynak),
+                str(isaret),
+                f"surec-{i}",
+            ],
+            env={**os.environ, "PYTHONUTF8": "1"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        for i, kaynak in enumerate(kaynaklar)
+    ]
+    time.sleep(0.5)  # hepsi import edip işareti beklesin
+    isaret.write_text("basla")
+    ciktilar = [s.communicate(timeout=120) for s in surecler]
+    for surec, (_, hata) in zip(surecler, ciktilar, strict=True):
+        assert surec.returncode == 0, hata
+
+    satirlar = [cikti.split() for cikti, _ in ciktilar]
+    belge_idleri = {int(s[0]) for s in satirlar}
+    dosya_idleri = {int(s[1]) for s in satirlar}
+    yollar = {s[2] for s in satirlar}
+    assert len(belge_idleri) == 1 and len(dosya_idleri) == 1 and len(yollar) == 1
+    assert sorted(s[3] for s in satirlar) == ["False", "True", "True", "True"]
+
+    assert _sayi(db, sema.belge) == 1 and _sayi(db, sema.arsiv_dosya) == 1
+    assert _sayi(db, sema.islem_anahtari) == 4  # her sürecin anahtarı kayıtlı
+    dosyalar = [p for p in arsiv_dizini.rglob("*") if p.is_file()]
+    assert [p.relative_to(arsiv_dizini).as_posix() for p in dosyalar] == list(yollar)
+    assert dosyalar[0].read_bytes() == icerik
+    assert not any((arsiv_dizini / arsiv.GECICI_DIZIN_ADI).iterdir())

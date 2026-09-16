@@ -30,10 +30,15 @@ def upgrade() -> None:
         sa.Column("sha256", sa.Text(), nullable=False),
         sa.Column("boyut", sa.Integer(), nullable=False),
         sa.Column("mime", sa.Text(), nullable=False),
+        sa.Column("uzanti", sa.Text(), nullable=False),
+        sa.Column("kaynak_adi", sa.Text(), nullable=False),
         sa.Column("goreli_yol", sa.Text(), nullable=False),
         sa.Column("olusturma_zamani", sa.DateTime(), nullable=False),
         sa.CheckConstraint(
             "boyut >= 0", name=op.f("ck_arsiv_dosya_boyut_negatif_degil")
+        ),
+        sa.CheckConstraint(
+            "kaynak_adi <> ''", name=op.f("ck_arsiv_dosya_kaynak_adi_bos_degil")
         ),
         sa.CheckConstraint(
             "length(sha256) = 64", name=op.f("ck_arsiv_dosya_sha256_64_hex")

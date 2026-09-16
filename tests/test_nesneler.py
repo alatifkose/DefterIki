@@ -446,6 +446,8 @@ def _belge_ac(db: vt.Veritabani) -> int:
                 sha256="b" * 64,
                 boyut=10,
                 mime="application/pdf",
+                uzanti=".pdf",
+                kaynak_adi="ekstre.pdf",
                 goreli_yol="2026/ekstre.pdf",
                 olusturma_zamani=SIMDI,
             )

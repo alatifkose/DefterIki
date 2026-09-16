@@ -17,13 +17,21 @@ verir; mesajda yol yoktur.
 Kopya: önce ``<belge dizini>/gecici/<rastgele>.tmp`` adına akışla yazılır,
 yazarken özet ve boyut hesaplanır ve 50 MiB sınırı (C18) aşılınca kesilir;
 sonra ``fsync`` ve aynı dosya sisteminde ``os.replace`` ile
-``<ilk iki hex>/<sha256><uzantı>`` yoluna taşınır. Herhangi bir adım
-düşerse geçici dosya silinir; yarım kopya arşivde kalmaz. Aynı içerik daha
-önce arşivlenmişse hedef zaten vardır: ikinci dosya üretilmez, kopya atılır.
+``<ilk iki hex>/<sha256>`` yoluna taşınır. Herhangi bir adım düşerse geçici
+dosya silinir; yarım kopya arşivde kalmaz.
+
+**Fiziksel kimlik yalnız SHA-256'dır** (karar 2026-09-16, Abdüllatif): arşiv
+yolu içerikten deterministik türer, uzantı taşımaz. Aynı baytlar hangi adla,
+hangi uzantıyla ya da uzantısız gelirse gelsin tek fiziksel dosyaya karşılık
+gelir; hedef zaten varsa kopya atılır. Uzantı, MIME ve kaynak dosya adı
+metadata'dır, ``arsiv_dosya`` satırında saklanır. İki süreç aynı içeriği
+aynı anda arşivlerse ikisi de aynı baytları aynı yola bırakır; ``os.replace``
+atomiktir, sonuç tek dosyadır.
 
 MIME: ilk baytlardaki imzadan (PDF, PNG, JPEG) belirlenir; imza biliniyorsa
-uzantı onunla uyuşmalıdır, bilinmiyorsa uzantıdan tahmin edilir, o da yoksa
-``application/octet-stream``. Boş dosya belge olamaz.
+uzantı onunla uyuşmalıdır (giriş kapısı denetimi), bilinmiyorsa uzantıdan
+tahmin edilir, o da yoksa ``application/octet-stream``. Boş dosya belge
+olamaz.
 """
 
 from __future__ import annotations
@@ -74,8 +82,12 @@ class ArsivlenenDosya:
     sha256: str
     boyut: int
     mime: str
+    uzanti: str
+    """Kaynak adındaki küçük harfli uzantı (``.pdf``); yoksa boş. Metadata."""
+    kaynak_adi: str
+    """Gelen dizinindeki dosya adı; arşiv yolunu etkilemez. Metadata."""
     goreli_yol: str
-    """Belge dizinine göre POSIX yol: ``<ilk iki hex>/<sha256><uzantı>``."""
+    """Belge dizinine göre POSIX yol: ``<ilk iki hex>/<sha256>``; uzantısız."""
     diskte_zaten_vardi: bool
     """Aynı içerik daha önce arşivlenmişti; yeni dosya yazılmadı."""
 
@@ -142,14 +154,10 @@ def dosyayi_arsivle(
     try:
         ozet, boyut, bas = _akisla_kopyala(kaynak, gecici)
         mime = _mime_belirle(bas, uzanti)
-        hedef = belge_dizini / ozet[:2] / f"{ozet}{uzanti}"
+        goreli_yol = arsiv_goreli_yolu(ozet)
+        hedef = arsiv_yolu(belge_dizini, goreli_yol)
         hedef.parent.mkdir(parents=True, exist_ok=True)
-        if hedef.exists():
-            gecici.unlink()
-            zaten_vardi = True
-        else:
-            os.replace(gecici, hedef)
-            zaten_vardi = False
+        zaten_vardi = not _yerine_koy(gecici, hedef, boyut)
     except BaseException:
         gecici.unlink(missing_ok=True)
         raise
@@ -158,13 +166,41 @@ def dosyayi_arsivle(
         sha256=ozet,
         boyut=boyut,
         mime=mime,
-        goreli_yol=hedef.relative_to(belge_dizini).as_posix(),
+        uzanti=uzanti,
+        kaynak_adi=kaynak.name,
+        goreli_yol=goreli_yol,
         diskte_zaten_vardi=zaten_vardi,
     )
 
 
+def arsiv_goreli_yolu(sha256: str) -> str:
+    """İçerikten deterministik arşiv yolu: ``<ilk iki hex>/<sha256>``."""
+    return f"{sha256[:2]}/{sha256}"
+
+
 def arsiv_yolu(belge_dizini: Path, goreli_yol: str) -> Path:
     return belge_dizini / Path(goreli_yol)
+
+
+def _yerine_koy(gecici: Path, hedef: Path, boyut: int) -> bool:
+    """Geçici dosyayı hedefe atomik taşır; hedef zaten varsa kopyayı atar.
+
+    Döner: ``True`` yeni dosya yazıldı, ``False`` aynı içerik zaten yerindeydi.
+    İki süreç aynı anda gelirse ikisi de aynı baytları taşır; ``os.replace``
+    atomiktir. Windows'ta hedef o an açıksa taşıma reddedilebilir; hedef
+    yerinde ve doğru boyuttaysa bu da "zaten vardı" demektir.
+    """
+    if hedef.is_file() and hedef.stat().st_size == boyut:
+        gecici.unlink()
+        return False
+    try:
+        os.replace(gecici, hedef)
+    except PermissionError:
+        if hedef.is_file() and hedef.stat().st_size == boyut:
+            gecici.unlink()
+            return False
+        raise _red(GEREKCE_OKUNAMADI) from None
+    return True
 
 
 def arsivde_var_mi(belge_dizini: Path, goreli_yol: str, boyut: int) -> bool:

@@ -180,12 +180,15 @@ arsiv_dosya = Table(
     Column("sha256", Text, nullable=False),
     Column("boyut", Integer, nullable=False),
     Column("mime", Text, nullable=False),
+    Column("uzanti", Text, nullable=False),
+    Column("kaynak_adi", Text, nullable=False),
     Column("goreli_yol", Text, nullable=False),
     _zaman(),
     UniqueConstraint("sha256"),
     UniqueConstraint("goreli_yol"),
     CheckConstraint("boyut >= 0", name="boyut_negatif_degil"),
     CheckConstraint("length(sha256) = 64", name="sha256_64_hex"),
+    CheckConstraint("kaynak_adi <> ''", name="kaynak_adi_bos_degil"),
     sqlite_autoincrement=True,
 )
 

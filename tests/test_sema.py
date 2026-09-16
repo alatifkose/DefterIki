@@ -278,6 +278,8 @@ def test_ayni_dosya_ikinci_belge_olamaz(kurulu: vt.Veritabani) -> None:
                     sha256="a" * 64,
                     boyut=1,
                     mime="application/pdf",
+                    uzanti=".pdf",
+                    kaynak_adi="ekstre.pdf",
                     goreli_yol="2026/a.pdf",
                     olusturma_zamani=SIMDI,
                 )

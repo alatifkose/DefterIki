@@ -202,7 +202,7 @@ Kurallar:
 * Bütün kısıtlar isimli (`pk_`, `fk_`, `uq_`, `ck_`, `ix_` kalıbı). Durum,
   yön, eksen, para birimi, tür sütunları izinli değerlerle CHECK'li;
   `tutar_kurus >= 0`, `seviye >= 0`, `alt_id <> ust_id`, boş alan adı ve
-  boş anahtar reddedilir, `sha256` 64 karakter.
+  boş anahtar reddedilir, `sha256` 64 karakter, `kaynak_adi` boş değil.
 * Zaman damgaları UTC `DateTime`; kaynak tarihleri (`islem_tarihi`,
   `valor_tarihi`) ayrı `Date`.
 * İndeksler Tam Plan 5.3'ün defter-sız hâli: nesne (seviye, id); bağlantı
@@ -380,10 +380,24 @@ dizininin altında, simgesel bağlantı ya da takma yol değil, sıradan dosya;
 red `GIRDI_GECERSIZ` + kategorik gerekçe, mesajda yol yok), dosyayı
 `<belge dizini>/gecici/<rastgele>.tmp` adına akışla kopyalarken SHA-256 ve
 boyutu hesaplar, 50 MiB sınırını (C18) aşınca keser, `fsync` sonrası
-`os.replace` ile `<ilk iki hex>/<sha256><uzantı>` yoluna atomik taşır.
-Herhangi bir adım düşerse geçici dosya silinir; yarım kopya kalmaz. Aynı
-içerik daha önce arşivlendiyse ikinci dosya üretilmez. MIME ilk baytların
-imzasından (PDF, PNG, JPEG) belirlenir; imza biliniyorsa uzantı uyuşmalı,
+`os.replace` ile `<ilk iki hex>/<sha256>` yoluna atomik taşır. Herhangi bir
+adım düşerse geçici dosya silinir; yarım kopya kalmaz.
+
+**Karar (2026-09-16, Abdüllatif): fiziksel kimlik yalnız SHA-256.** Arşiv
+yolu içerikten deterministik türer ve uzantı taşımaz; SHA-256 fiziksel
+kimliğin tek kaynağıdır. Aynı baytlar hangi adla, hangi uzantıyla ya da
+uzantısız gelirse gelsin tek fiziksel dosyaya karşılık gelir; hedef zaten
+varsa kopya atılır, "aynı SHA ile başlayan dosya" araması yapılmaz. Uzantı,
+MIME ve kaynak dosya adı metadata'dır; `arsiv_dosya.uzanti`, `mime`,
+`kaynak_adi` sütunlarında saklanır ve ilk gelişteki değerler kalır (aynı
+içerik sonra başka adla gelirse metadata değişmez). İki süreç aynı içeriği
+aynı anda arşivlerse ikisi de aynı baytları aynı yola bırakır; `os.replace`
+atomiktir, sonuç tek dosyadır; Windows'ta hedef o an açıksa taşıma
+reddedilir, hedef yerinde ve doğru boyuttaysa "zaten vardı" sayılır.
+
+Giriş kapısı denetimi aynen durur: MIME ilk baytların imzasından (PDF, PNG,
+JPEG) belirlenir; imza biliniyorsa uzantı onunla uyuşmalı (PDF içerik
+`.png` ya da `.xyz` adıyla reddedilir, uzantısız kabul edilir), imza
 bilinmiyorsa uzantıdan tahmin, o da yoksa `application/octet-stream`. Boş
 dosya belge olamaz. `arsivde_var_mi` dosyanın yerinde ve kayıtlı boyutta
 olduğunu söyler (okuma başlatma ön şartı).
@@ -441,8 +455,11 @@ Her yazma işlevi işlem anahtarı ister, denetim olayı yazar, commit yapmaz.
 Denetim izi: `belge_al`, `okuma_baslat`, `satir_gonder`, `okuma_tamamla`,
 `belge_hazir`, `belge_kaydet`.
 
-Test (`tests/test_arsiv.py`): içerik adresli atomik taşıma ve geçici dosya
-kalmaması; aynı içerik ikinci dosya üretmez; parçalı okuma ve özet; sınır
+Test (`tests/test_arsiv.py`): içerik adresli (uzantısız) atomik taşıma ve
+geçici dosya kalmaması; aynı içerik farklı ad / aynı ad / uzantısız /
+bilinmeyen uzantı / bilinen uzantıyla gelince tek fiziksel dosya, ad ve
+uzantı metadata; imzalı içerik bilinmeyen uzantıyla kapıda ret; parçalı
+okuma ve özet; sınır
 aşımı ve kopya ortasında hata sonrası yarım kopya yok; boş dosya; MIME
 imzadan/uzantıdan; uzantı-içerik uyuşmazlığı; 3.3 yol kuralları (göreli,
 `..`, olmayan, dizin dışı, dizin, dışarıya ve içeriye simgesel bağlantı;
@@ -458,7 +475,9 @@ paket; tekrar gönderim mevcut/çakışma; aynı işlem anahtarı; kapalı okuma
 satır; mutabakat farkı hiçbir durumu değiştirmez ve eksik satırla tamamlanır;
 tamamlarken tamlık; tamlıksız sıfır satır; yeniden tamamlama; hata her şeyi
 geri alır; `belge_kaydet` HAZIR → KAYITLI, eski sürüm, hazır olmayan belge;
-sonuçlanmamış satır kaydı engeller.
+sonuçlanmamış satır kaydı engeller; dört ayrı süreç aynı içeriği farklı
+adlarla aynı anda getirir → arşivde tek dosya, tek `arsiv_dosya`, tek belge,
+dört işlem anahtarı, geçici dosya yok.
 
 ## Teknik hata günlüğü
 

@@ -99,6 +99,10 @@ class ArsivDosyasi:
     sha256: str
     boyut: int
     mime: str
+    uzanti: str
+    kaynak_adi: str
+    """İlk gelişteki dosya adı ve uzantısı (metadata); aynı içerik sonra başka
+    adla gelirse bu alanlar değişmez."""
     goreli_yol: str
     olusturma_zamani: datetime
 
@@ -253,6 +257,8 @@ def belge_tanimla(
                     sha256=dosya.sha256,
                     boyut=dosya.boyut,
                     mime=dosya.mime,
+                    uzanti=dosya.uzanti,
+                    kaynak_adi=dosya.kaynak_adi,
                     goreli_yol=dosya.goreli_yol,
                     olusturma_zamani=simdi,
                 )
@@ -933,6 +939,8 @@ def _dosya(satir: RowMapping) -> ArsivDosyasi:
         sha256=str(satir["sha256"]),
         boyut=int(satir["boyut"]),
         mime=str(satir["mime"]),
+        uzanti=str(satir["uzanti"]),
+        kaynak_adi=str(satir["kaynak_adi"]),
         goreli_yol=str(satir["goreli_yol"]),
         olusturma_zamani=satir["olusturma_zamani"],
     )
