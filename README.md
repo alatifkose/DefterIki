@@ -81,9 +81,8 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   (iki nesne onayı, altı hareket, KAYITLI, bakiye); aynı belge ikinci kez
   yazılmadı; bulgular ve açık kararlar "Cowork talimatı" bölümünde
 
-Henüz yok: veri kökü kararı (AppData yönlendirmesi), devreden bakiye
-kararı, diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması
-(Aşama 7), GUI.
+Henüz yok: devreden bakiye kararı, diğer işlem sözleşmeleri (Aşama 8),
+mükerrerlik karşılaştırması (Aşama 7), GUI.
 
 ## Kurulum
 
@@ -370,9 +369,11 @@ Bulgular:
   ise gerçek `%LOCALAPPDATA%\DEFTERIKI`'yi açar: iki ayrı veritabanı, "karar
   bekleyen talep yok". Denemede geçici çözüm terminalde
   `DEFTERIKI_VERI_KOKU` ile yönlendirilmiş yolu vermek oldu. **Karar
-  bekliyor:** veri kökü AppData dışında sabit bir dizine alınmalı ve hem
-  Claude masaüstü `mcpServers.defteriki.env` hem de kullanıcı ortamı aynı
-  `DEFTERIKI_VERI_KOKU` değerini taşımalı.
+  (2026-09-17, Abdüllatif):** veri kökü `C:\dev\DefterIki-veri`; hem Claude
+  masaüstü `mcpServers.defteriki.env` hem kullanıcı ortam değişkeni
+  (`setx`) aynı `DEFTERIKI_VERI_KOKU` değerini taşır. Varsayılan AppData
+  yolu Windows'ta Claude masaüstü altında güvenilmez; kurulumda bu
+  değişken açıkça verilir.
 * `defteriki-onay` zamanları UTC gösteriyor (günlük yerel saat); kullanıcıya
   yerel saat gösterilmeli (Aşama 6 ekranında ya da komutta).
 * Açılış bakiyesi: Cowork `tamlik.acilis_bakiyesi_kurus` verdi (68 kuruş),
