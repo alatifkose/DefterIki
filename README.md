@@ -426,13 +426,18 @@ yöntemi Cowork'la çalışır, talep durumu veritabanında tutulur.
 ## Pencere (Aşama 6)
 
 Masaüstü penceresi, PySide6 (Qt) ile. **Sınır (K20; Abdüllatif, 2026-09-17):**
-pencere veritabanına doğrudan erişen ikinci bir iş mantığı kurmaz; yenileme
-dahil her okuma ve işlem Aşama 4 işlevleri (`hesaplamalar`, `onaylar`,
-`belgeler`, `nesneler`, `veritabani`) üzerinden yürür; `arayuz/` altında SQL,
-tablo adı ya da PRAGMA yoktur. Bir görünüm için işlev yoksa önce Aşama 4'e
-işlev ve testi eklenir, sonra pencere onu çağırır. Pencere MCP sunucusuyla
-ayrı süreçtir, bellek paylaşmaz; aynı ayarlarla aynı veritabanı dosyasını
-açar.
+pencere veritabanına doğrudan erişen ikinci bir iş mantığı kurmaz. Katman
+sırası **pencere → `pencere_islevleri` → Aşama 4 işlevleri ve veritabanı**:
+`arayuz/` altında `veritabani`, `sema`, SQLAlchemy ya da `sqlite3` import
+edilmez, SQL ya da PRAGMA yazılmaz (testle korunur:
+`test_arayuz_altyapi_modullerini_import_etmez`). Pencere düz sorular sorar
+("veri değişti mi?", 6.2'de "bekleyenler", "karar ver"), cevabın nasıl
+bulunduğunu bilmez. `src/defteriki/pencere_islevleri.py` bu soruların
+karşılığıdır: veritabanı nesnesini tutar ve kapatır, `onaylar`, `nesneler`,
+`hesaplamalar` gibi mevcut işlevleri çağırır, kural koymaz. Bir görünüm için
+işlev yoksa önce oraya (gerekirse Aşama 4 modülüne) işlev ve testi eklenir,
+sonra pencere onu çağırır. Pencere MCP sunucusuyla ayrı süreçtir, bellek
+paylaşmaz; aynı ayarlarla aynı veritabanı dosyasını açar.
 
 ```bash
 uv run defteriki-arayuz
@@ -450,14 +455,16 @@ uv run defteriki-arayuz
   (yerel saat, sayaçla). Karar kutusu (6.2) ve bakiye/hareket görünümü
   (6.3) orta alana eklenecek.
 * `arayuz/degisiklik_izleme.py`: `DegisiklikIzleyici`, Qt zamanlayıcısıyla
-  (varsayılan 1 s) `Veritabani.degisiklik_sayaci()` çağırır; değişince
-  `degisti(sayac)` sinyali, görünümler o zaman yenilenir. Yoklama düşerse
-  izleme durur, hata günlüğe (`arayuz_izleme_hatasi`), `durdu(mesaj)`
-  sinyali durum çubuğunda görünür; sessiz yeniden deneme yok.
-* `Veritabani.degisiklik_sayaci()` (Aşama 4 katmanında): SQLite
-  `PRAGMA data_version`; okuma motorundan ayrılmış tek bağlantıda kısa okuma
-  işlemi açıp kapatır, kilit tutmaz; yalnız *başka* bağlantıların commit'i
-  değeri değiştirir. `kapat()` bu bağlantıyı da bırakır.
+  (varsayılan 1 s) `PencereIslevleri.degisti_mi()` sorar; evetse `degisti`
+  sinyali, görünümler o zaman yenilenir. Yoklama düşerse izleme durur, hata
+  günlüğe (`arayuz_izleme_hatasi`), `durdu(mesaj)` sinyali durum çubuğunda
+  görünür; sessiz yeniden deneme yok.
+* `pencere_islevleri.PencereIslevleri.degisti_mi()`: son sorudan bu yana
+  başka bir bağlantı yazdı mı; ilk soru başlangıç noktasıdır. Altında
+  `Veritabani.degisiklik_sayaci()` (SQLite `PRAGMA data_version`; okuma
+  motorundan ayrılmış tek bağlantıda kısa okuma işlemi açıp kapatır, kilit
+  tutmaz; yalnız *başka* bağlantıların commit'i değeri değiştirir;
+  `kapat()` bağlantıyı bırakır). Pencere bu ayrıntıyı bilmez.
 * Bağımlılıklar: `PySide6` (ürün), `pytest-qt` (geliştirme);
   `tests/conftest.py` `QT_QPA_PLATFORM=offscreen` koyar (tanımlıysa dokunmaz),
   pencere testleri ekransız çalışır. Not: Claude masaüstü `defteriki-mcp.exe`
@@ -469,7 +476,10 @@ durur; başka bağlantının yazması durum çubuğuna düşer (iki kez, sayaç)
 yazma yoksa sinyal yok; izleyici `yokla` değişimi bildirir; yoklama hatası
 izlemeyi durdurur ve günlüğe yazar; `main` başarılı (pencere görünür, olay
 günlükte), ayar hatasında ileti ve `1`, beklenmeyen hatada günlük ve `1`;
-komut girişi `pyproject.toml`de. `tests/test_veritabani.py`: sayaç başka
+komut girişi `pyproject.toml`de; `arayuz/` altyapı modülü import etmez.
+`tests/test_pencere_islevleri.py`: ilk soru başlangıç noktası, başka sürecin
+yazması bir kez evet, iki yazma tek evet, soru yazmayı engellemez, kapat
+sonrası yeniden sorulabilir. `tests/test_veritabani.py`: sayaç başka
 bağlantının commit'iyle değişir, kilit tutmaz, `kapat` bağlantıyı bırakır.
 
 ## Veritabanı

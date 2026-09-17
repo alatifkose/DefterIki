@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QLabel, QMainWindow, QStatusBar
 
 from defteriki.arayuz.degisiklik_izleme import VARSAYILAN_ARALIK_MS, DegisiklikIzleyici
 from defteriki.baslangic import Hazirlik
-from defteriki.veritabani import Veritabani
+from defteriki.pencere_islevleri import PencereIslevleri
 
 PENCERE_BASLIGI = "DEFTERIKI"
 PENCERE_GENISLIK = 1280
@@ -28,7 +28,7 @@ class AnaPencere(QMainWindow):
     def __init__(
         self,
         hazirlik: Hazirlik,
-        veritabani: Veritabani,
+        islevler: PencereIslevleri,
         yoklama_araligi_ms: int = VARSAYILAN_ARALIK_MS,
     ) -> None:
         super().__init__()
@@ -53,12 +53,12 @@ class AnaPencere(QMainWindow):
             cubuk.addPermanentWidget(etiket)
         self.setStatusBar(cubuk)
 
-        self.izleyici = DegisiklikIzleyici(veritabani, yoklama_araligi_ms, self)
+        self.izleyici = DegisiklikIzleyici(islevler, yoklama_araligi_ms, self)
         self.izleyici.degisti.connect(self._degisikligi_goster)
         self.izleyici.durdu.connect(self._izleme_durdu)
         self.izleyici.baslat()
 
-    def _degisikligi_goster(self, _sayac: int) -> None:
+    def _degisikligi_goster(self) -> None:
         self.degisiklik_sayisi += 1
         saat = datetime.now().strftime("%H:%M:%S")
         self.degisiklik_etiketi.setText(

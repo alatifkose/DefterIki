@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
 from defteriki import ayarlar as ay
-from defteriki import denetim, gunluk
+from defteriki import denetim, gunluk, pencere_islevleri
 from defteriki import sozlesmeler as sz
 from defteriki import veritabani as vt
 from defteriki.arayuz import ana_pencere, baslat, degisiklik_izleme
@@ -48,13 +48,13 @@ def hazirlik(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Hazirl
 
 @pytest.fixture
 def pencere(hazirlik: Hazirlik, qtbot: QtBot) -> Iterator[ana_pencere.AnaPencere]:
-    db = vt.veritabani_ac(hazirlik.ayarlar)
-    p = ana_pencere.AnaPencere(hazirlik, db, yoklama_araligi_ms=YOKLAMA_MS)
+    islevler = pencere_islevleri.pencere_islevleri_ac(hazirlik.ayarlar)
+    p = ana_pencere.AnaPencere(hazirlik, islevler, yoklama_araligi_ms=YOKLAMA_MS)
     qtbot.addWidget(p)
     p.show()
     yield p
     p.close()
-    db.kapat()
+    islevler.kapat()
 
 
 def _baska_surec_yazar(hazirlik: Hazirlik) -> None:
@@ -124,9 +124,9 @@ def test_yazma_yoksa_sinyal_yok(pencere: ana_pencere.AnaPencere, qtbot: QtBot) -
 
 
 def test_izleyici_yokla_degisimi_bildirir(hazirlik: Hazirlik, qtbot: QtBot) -> None:
-    db = vt.veritabani_ac(hazirlik.ayarlar)
+    islevler = pencere_islevleri.pencere_islevleri_ac(hazirlik.ayarlar)
     try:
-        izleyici = degisiklik_izleme.DegisiklikIzleyici(db, aralik_ms=10_000)
+        izleyici = degisiklik_izleme.DegisiklikIzleyici(islevler, aralik_ms=10_000)
         izleyici.baslat()
         assert izleyici.yokla() is False
 
@@ -136,7 +136,7 @@ def test_izleyici_yokla_degisimi_bildirir(hazirlik: Hazirlik, qtbot: QtBot) -> N
         assert izleyici.yokla() is False
         izleyici.durdur()
     finally:
-        db.kapat()
+        islevler.kapat()
 
 
 def test_yoklama_hatasi_izlemeyi_durdurur_ve_gunluge_yazar(
@@ -145,13 +145,13 @@ def test_yoklama_hatasi_izlemeyi_durdurur_ve_gunluge_yazar(
     qtbot: QtBot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def bozuk_sayac() -> int:
+    def bozuk_soru() -> bool:
         raise OSError("disk yok")
 
     monkeypatch.setattr(
-        pencere.izleyici._veritabani,  # pyright: ignore[reportPrivateUsage]
-        "degisiklik_sayaci",
-        bozuk_sayac,
+        pencere.izleyici._islevler,  # pyright: ignore[reportPrivateUsage]
+        "degisti_mi",
+        bozuk_soru,
     )
     with qtbot.waitSignal(pencere.izleyici.durdu, timeout=BEKLEME_MS):
         pass
@@ -227,3 +227,20 @@ def test_komut_girisi_pyprojectte() -> None:
         encoding="utf-8"
     )
     assert 'defteriki-arayuz = "defteriki.arayuz.baslat:main"' in metin
+
+
+# --- katman sınırı (K20) --------------------------------------------------------------
+
+
+def test_arayuz_altyapi_modullerini_import_etmez() -> None:
+    """Pencere → pencere_islevleri → veritabanı: arayuz/ altında veritabani,
+    sema, sqlalchemy ya da sqlite3 import edilmez, SQL yazılmaz."""
+    yasakli = ("defteriki.veritabani", "defteriki.sema", "sqlalchemy", "sqlite3")
+    arayuz = Path(__file__).resolve().parent.parent / "src" / "defteriki" / "arayuz"
+    for dosya in sorted(arayuz.glob("*.py")):
+        for satir in dosya.read_text(encoding="utf-8").splitlines():
+            if satir.startswith(("import ", "from ")):
+                assert not any(ad in satir for ad in yasakli), f"{dosya.name}: {satir}"
+            assert "PRAGMA" not in satir and "SELECT " not in satir, (
+                f"{dosya.name}: {satir}"
+            )

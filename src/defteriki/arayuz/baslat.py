@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from defteriki import gunluk
 from defteriki.arayuz.ana_pencere import PENCERE_BASLIGI, AnaPencere
 from defteriki.baslangic import CIKIS_HATALI, BaslangicHatasi, ortami_hazirla
-from defteriki.veritabani import veritabani_ac
+from defteriki.pencere_islevleri import pencere_islevleri_ac
 
 OLAY_ARAYUZ_BASLANGIC = "arayuz_baslangic"
 OLAY_ARAYUZ_HATASI = "arayuz_hatasi"
@@ -46,13 +46,13 @@ def main(
         return CIKIS_HATALI
 
     ayarlar = hazirlik.ayarlar
-    veritabani = veritabani_ac(ayarlar)
+    islevler = pencere_islevleri_ac(ayarlar)
     try:
         gunluk.olay_kaydet(
             OLAY_ARAYUZ_BASLANGIC,
             f"ortam={ayarlar.ortam.value} sema={hazirlik.sema_surumu}",
         )
-        pencere = AnaPencere(hazirlik, veritabani)
+        pencere = AnaPencere(hazirlik, islevler)
         pencere.show()
         kod = calistir(uygulama)
         pencere.close()
@@ -62,7 +62,7 @@ def main(
         _hatayi_bildir(f"Beklenmeyen hata ({type(hata).__name__}): {hata}", goster)
         return CIKIS_HATALI
     finally:
-        veritabani.kapat()
+        islevler.kapat()
 
 
 def _uygulamayi_al(argv: Sequence[str] | None) -> QCoreApplication:
