@@ -9,9 +9,9 @@ Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
 (veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
 işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
-sürüyor: 5.1 (zarf, hata, işlem anahtarı) bitti; 5.2 üç parça (nesne
-araçları, belge/hareket araçları, durum/sorgu araçları) ve 5.3 (Cowork
-talimatı, gerçek ekstre) sırada. **Kararlar (2026-09-17, Abdüllatif):**
+sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2/1 (nesne araçları ve
+geçici onay komutu) bitti; 5.2/2 (belge/hareket araçları), 5.2/3
+(durum/sorgu araçları) ve 5.3 (Cowork talimatı, gerçek ekstre) sırada. **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
 satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
@@ -60,8 +60,12 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * MCP yanıt zarfı ve güvenli hata çevirisi; ilk değişiklik aracı
   `nesne_tanimla` (FORM/GONDER) MCP'de (`zarf.py`, `mcp_araclari.py`,
   `mcp_kapisi.py`)
+* Nesne araçları `nesne_bul`, `nesne_getir`, `oturum_baglami` (C16) ve
+  geçici kullanıcı onayı komutu `uv run defteriki-onay` (`onay_komutu.py`;
+  MCP'ye açık değil)
 
-Henüz yok: diğer MCP araçları (5.2), Cowork talimatı (5.3), diğer işlem
+Henüz yok: belge/hareket ve durum/sorgu araçları (5.2/2, 5.2/3), Cowork
+talimatı (5.3), diğer işlem
 sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7), GUI.
 
 ## Kurulum
@@ -120,9 +124,11 @@ ardından MCP sunucusunu stdin/stdout üzerinde çalıştırır. İstemci bağla
 kapatınca `0` ile çıkar. Hazırlık düşerse hata stderr'e yazılır, çıkış kodu
 `1` olur; stdout'a hiçbir şey yazılmaz.
 
-Araçlar (`YETENEKLER`): `sistem_durumu` (uygulama sürümü, ortam, şema
-sürümü `0001`, yetenek listesi, talimat sürümü; yol ya da sır içermez) ve
-Teslim 5.1'den itibaren `nesne_tanimla` (FORM/GONDER). Diğer araçlar 5.2'de.
+Araçlar (`YETENEKLER`, kayıt sırasıyla): `sistem_durumu` (uygulama
+sürümü, ortam, şema sürümü `0001`, yetenek listesi, talimat sürümü; yol ya
+da sır içermez), `nesne_tanimla` (FORM/GONDER, 5.1), `nesne_bul`,
+`nesne_getir`, `oturum_baglami` (5.2/1). Belge/hareket ve durum/sorgu
+araçları 5.2/2 ve 5.2/3'te.
 Aşama 3'ün geçici deneme araçları kaldırıldı; ne ölçtükleri "Cowork
 entegrasyonu" bölümünde. Gelen dizini ayarı (`DEFTERIKI_GELEN_DIZINI`)
 kaldı: belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapılır.
@@ -170,7 +176,52 @@ farklı içerik çakışma; ürün hatası kod ve alanıyla; veritabanı meşgul
 YENIDEN_DENE; beklenmeyen hata mesajı zarfa girmez, türü günlüğe; zarfta yol
 ve ortam değişkeni yok; sunucu üzerinden şema reddi değerleri dışarı
 vermez; bilinmeyen araç; araç listesi ve şemalar; sunucu üzerinden GONDER.
-stdio testi (`test_mcp_kapisi.py`) iki aracı ve `talimat_surumu`nu görür.
+stdio testi (`test_mcp_kapisi.py`) araç listesini ve `talimat_surumu`nu görür.
+
+### Nesne araçları ve geçici onay komutu (Teslim 5.2/1)
+
+Okuma araçları salt okunur işlemde çalışır, işlem anahtarı istemez.
+
+* `nesne_bul(alan_adi, deger, deger_turu, seviye, durumlar, sayfa_siniri,
+  sayfa_baslangici)`: `nesneler.nesne_bul` + özellikler tek sorguyla
+  (`nesneler.ozellikleri_getir`). `icerik.nesneler` her nesne için kimlik,
+  seviye, durum, sürüm ve özellikler (kimlik, alan adı, değer, tür, şart);
+  `icerik.sayfa` sınır/başlangıç/dönen. Eşleşme türüyle ve normalizasyonsuz
+  (`"AD"` ≠ `"ad"`, `"garanti bbva"` ≠ `"Garanti BBVA"`). `sonraki_adim`:
+  bulunduysa "kimliğini kullan, yeniden önerme", yoksa "kanıtı varsa
+  nesne_tanimla ile öner". Geçersiz sayfalama `GIRDI_GECERSIZ`.
+* `nesne_getir(nesne_id)`: özellikler (şart işaretli), üstler, altlar,
+  sürüm (`hedef_surumu`); yoksa `HEDEF_BULUNAMADI`.
+* `oturum_baglami(son_nesne_sayisi=20)`: Tam Plan C16 — kalıcı kimlikler
+  DEFTERIKI'dedir; Cowork oturum başında son açılan nesneleri (yeniden
+  eskiye, özellikleriyle), kullanılan alan adlarını (kullanım sayısıyla;
+  `nesneler.alan_adlarini_listele`) ve kullanıcı kararı bekleyen işleri
+  (`onaylar.bekleyenleri_listele`: talep, tür, hedef, sürüm, zaman) alır;
+  zarf `bekleyen` sayısını taşır. "Seçili defter" tek defter kararıyla yok.
+
+**Geçici onay komutu** (`src/defteriki/onay_komutu.py`, `uv run
+defteriki-onay`; karar 2026-09-17). Aşama 6 ekranı gelene kadar kullanıcı
+onayı buradan verilir. İki sınır: MCP'ye açılmaz (`YETENEKLER`de yok, Cowork
+ulaşamaz, kendi kendine onay üretemez; aktör `KULLANICI`); **onay
+mekanizması terminale bağlanmaz** — karar mantığı, sürüm denetimi ve etkiler
+`onaylar.karar_uygula` ve `nesneler`de, komut yalnız onları çağıran geçici
+arayüz; ekran gelince dosya silinir, işlevler kalır. Alt komutlar:
+`bekleyenler`; `goster TALEP` (talep, hedef nesne, özellikler kimlikleriyle
+ve şart seçimi ipucu); `onayla TALEP --surum N [--sart ÖZELLİK_ID ...]
+[--gerekce ...]`; `reddet TALEP --surum N [--gerekce ...]`. `--surum`
+kullanıcının gördüğü hedef sürümüdür; değişmişse `HEDEF_SURUMU_DEGISTI`,
+karar uygulanmaz. Hata stderr'e, çıkış `1`. Not: script girişi
+`pyproject.toml`de; `uv sync` sonrası kullanılabilir.
+
+Test (`tests/test_mcp_nesne_araclari.py`): boş sonuç yönlendirmesi; mevcut
+nesne özellikleriyle, seviye ve durum filtresi, sayfalama; eşleşme türüyle
+ve normalizasyonsuz; geçersiz sayfalama; getir (özellik, üst, alt, sürüm,
+bekleyen nesnede yönerge); olmayan nesne; oturum bağlamı boş defter ve
+Garanti senaryosu (son nesneler yeniden eskiye, alan adı sayımı, bekleyen
+iş); sunucu üzerinden dört araç ve şema reddi.
+Test (`tests/test_onay_komutu.py`): bekleyenler ve göster; şart seçerek
+onay (nesne AKTIF, sürüm 2, şart kalıcı); red (SILINDI); eski sürüm, olmayan
+talep ve yabancı şart uygulanmaz; onay komutu MCP yeteneklerinde yok.
 
 Kurallar:
 
@@ -729,6 +780,7 @@ src/defteriki/    uygulama paketi
   mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu, araç kaydı, güvenli hata çevirisi
   mcp_araclari.py MCP araç gövdeleri: girdi modeli → Aşama 4 işlevi → zarf
   zarf.py         ortak MCP yanıt zarfı ve hata çevirisi
+  onay_komutu.py  uv run defteriki-onay; geçici kullanıcı onayı (Aşama 6'ya kadar), MCP'de yok
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
   sema.py         on beş tablo (METADATA), şema sürümü denetimi ve yükseltme

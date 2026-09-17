@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 defteriki = "defteriki.baslangic:main"
 defteriki-mcp = "defteriki.mcp_kapisi:main"
+defteriki-onay = "defteriki.onay_komutu:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]

@@ -39,7 +39,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
@@ -600,6 +600,82 @@ def nesne_bul(
         .offset(sayfalama.baslangic)
     ).all()
     return [_nesne(s._mapping) for s in satirlar]  # pyright: ignore[reportPrivateUsage]
+
+
+def ozellikleri_getir(
+    oturum: Session, nesne_idleri: Sequence[int]
+) -> dict[int, tuple[Ozellik, ...]]:
+    """Birden çok nesnenin özellikleri tek sorguyla (şart işaretli); liste araçları."""
+    idler = list(dict.fromkeys(int(k) for k in nesne_idleri))
+    if not idler:
+        return {}
+    sartlar = set(
+        oturum.execute(
+            select(sema.nesne_sart.c.ozellik_id).where(
+                sema.nesne_sart.c.nesne_id.in_(idler)
+            )
+        ).scalars()
+    )
+    sonuc: dict[int, list[Ozellik]] = {k: [] for k in idler}
+    for o in oturum.execute(
+        select(sema.nesne_ozellik)
+        .where(sema.nesne_ozellik.c.nesne_id.in_(idler))
+        .order_by(sema.nesne_ozellik.c.nesne_id, sema.nesne_ozellik.c.id)
+    ).all():
+        sonuc[int(o.nesne_id)].append(
+            Ozellik(
+                id=int(o.id),
+                alan_adi=str(o.alan_adi),
+                deger_turu=sz.DegerTuru(o.deger_turu),
+                deger=o.deger,
+                eslesme_degeri=o.eslesme_degeri,
+                sart=int(o.id) in sartlar,
+            )
+        )
+    return {k: tuple(v) for k, v in sonuc.items()}
+
+
+def son_nesneleri_listele(
+    oturum: Session,
+    *,
+    sinir: int = 20,
+    durumlar: Sequence[sz.NesneDurumu] = (
+        sz.NesneDurumu.AKTIF,
+        sz.NesneDurumu.ONAY_BEKLIYOR,
+    ),
+) -> list[Nesne]:
+    """En son açılan nesneler, yeniden eskiye (oturum bağlamı, C16)."""
+    satirlar = oturum.execute(
+        select(sema.nesne)
+        .where(sema.nesne.c.durum.in_([d.value for d in durumlar]))
+        .order_by(sema.nesne.c.id.desc())
+        .limit(sinir)
+    ).all()
+    return [_nesne(s._mapping) for s in satirlar]  # pyright: ignore[reportPrivateUsage]
+
+
+def alan_adlarini_listele(oturum: Session) -> list[tuple[str, int]]:
+    """Aktif ve onay bekleyen nesnelerde kullanılan alan adları ve kullanım sayısı.
+
+    Cowork yeni nesne önerirken mevcut adları aynen kullanır (C05, C16); eş
+    anlamlı alan icat etmez. Normalizasyon yok: ad olduğu gibi sayılır.
+    """
+    satirlar = oturum.execute(
+        select(sema.nesne_ozellik.c.alan_adi, func.count())
+        .select_from(
+            sema.nesne_ozellik.join(
+                sema.nesne, sema.nesne.c.id == sema.nesne_ozellik.c.nesne_id
+            )
+        )
+        .where(
+            sema.nesne.c.durum.in_(
+                [sz.NesneDurumu.AKTIF.value, sz.NesneDurumu.ONAY_BEKLIYOR.value]
+            )
+        )
+        .group_by(sema.nesne_ozellik.c.alan_adi)
+        .order_by(func.count().desc(), sema.nesne_ozellik.c.alan_adi)
+    ).all()
+    return [(str(ad), int(sayi)) for ad, sayi in satirlar]
 
 
 def aktif_nesneyi_getir(oturum: Session, nesne_id: int) -> Nesne:

@@ -57,6 +57,9 @@ KUTUPHANE_GUNLUK_ADI = "mcp"
 
 ARAC_SISTEM_DURUMU = "sistem_durumu"
 ARAC_NESNE_TANIMLA = "nesne_tanimla"
+ARAC_NESNE_BUL = "nesne_bul"
+ARAC_NESNE_GETIR = "nesne_getir"
+ARAC_OTURUM_BAGLAMI = "oturum_baglami"
 SURUM_BILINMIYOR = "bilinmiyor"
 
 OLAY_MCP_BASLANGIC = "mcp_baslangic"
@@ -87,6 +90,21 @@ ARAC_NESNE_TANIMLA_ACIKLAMASI = (
     "nesneyi belgesiz ya da önceden açma; önce mevcut nesneyi ara."
 )
 
+ARAC_NESNE_BUL_ACIKLAMASI = (
+    "Alan adı ve değerle mevcut nesneyi arar (eşleşme türüyle, normalizasyon "
+    "yok). Yeni nesne önermeden önce her zaman bununla bak; bulunan kimliği "
+    "doğrudan kullan. Sayfalı."
+)
+ARAC_NESNE_GETIR_ACIKLAMASI = (
+    "Bir nesnenin özelliklerini (şart işaretli), üstlerini, altlarını ve "
+    "sürümünü verir."
+)
+ARAC_OTURUM_BAGLAMI_ACIKLAMASI = (
+    "Oturum başında bir kez çağır: son açılan nesneler, kullanılan alan adları "
+    "ve kullanıcı kararı bekleyen işler. Kalıcı kimlikler DEFTERIKI'dedir; "
+    "bildiğin kimliği doğrudan kullan, alan adlarını aynen kullan."
+)
+
 type AracGovdesi[G] = Callable[[Veritabani, G, str], zarf.Zarf]
 
 
@@ -104,7 +122,14 @@ class SistemDurumu:
     """Cowork talimatının (docs/cowork.md) sürümü."""
 
 
-YETENEKLER: tuple[str, ...] = (ARAC_SISTEM_DURUMU, ARAC_NESNE_TANIMLA)
+YETENEKLER: tuple[str, ...] = (
+    ARAC_SISTEM_DURUMU,
+    ARAC_NESNE_TANIMLA,
+    ARAC_NESNE_BUL,
+    ARAC_NESNE_GETIR,
+    ARAC_OTURUM_BAGLAMI,
+)
+"""Araç adları, kayıt sırasıyla; ``tools/list`` aynı sırayı verir."""
 
 
 def uygulama_surumu() -> str:
@@ -256,6 +281,35 @@ def sunucu_kur(
         el_sikismasini_kaydet(baglam)
         return araci_calistir(
             ARAC_NESNE_TANIMLA, mcp_araclari.nesne_tanimla, veritabani, girdi
+        )
+
+    @sunucu.tool(name=ARAC_NESNE_BUL, description=ARAC_NESNE_BUL_ACIKLAMASI)
+    def nesne_bul_araci(
+        girdi: mcp_araclari.NesneBulGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(ARAC_NESNE_BUL, mcp_araclari.nesne_bul, veritabani, girdi)
+
+    @sunucu.tool(name=ARAC_NESNE_GETIR, description=ARAC_NESNE_GETIR_ACIKLAMASI)
+    def nesne_getir_araci(
+        girdi: mcp_araclari.NesneGetirGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_NESNE_GETIR, mcp_araclari.nesne_getir, veritabani, girdi
+        )
+
+    @sunucu.tool(name=ARAC_OTURUM_BAGLAMI, description=ARAC_OTURUM_BAGLAMI_ACIKLAMASI)
+    def oturum_baglami_araci(
+        baglam: Context[Any, Any],
+        girdi: mcp_araclari.OturumBaglamiGirdisi | None = None,
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_OTURUM_BAGLAMI,
+            mcp_araclari.oturum_baglami,
+            veritabani,
+            girdi or mcp_araclari.OturumBaglamiGirdisi(),
         )
 
     return sunucu

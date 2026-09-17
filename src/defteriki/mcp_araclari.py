@@ -10,8 +10,10 @@ Girdi modelleri Pydantic'tir; SDK bunlardan JSON Schema üretir ve çağrıdan
 İşlem anahtarı her değişiklik yapan araçta zorunludur (K08); eksikse araç
 kendi ``GIRDI_GECERSIZ`` hatasını verir.
 
-5.1'de tek değişiklik aracı: ``nesne_tanimla`` (FORM / GONDER). Diğerleri
-5.2'nin üç parçasında gelir.
+Araçlar: 5.1 ``nesne_tanimla`` (FORM / GONDER); 5.2/1 ``nesne_bul``,
+``nesne_getir``, ``oturum_baglami`` (C16: son nesneler, mevcut alan adları,
+bekleyen işler; Cowork bildiği kimliği doğrudan kullanır). Okuma araçları
+salt okunur işlemde çalışır ve anahtar istemez.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from defteriki import nesneler, zarf
+from defteriki import nesneler, onaylar, zarf
 from defteriki import sozlesmeler as sz
 from defteriki.veritabani import Veritabani
 
@@ -157,6 +159,156 @@ def _nesne_sonraki_adimi(durum: sz.NesneDurumu) -> str:
         f"Nesne önerisi {durum.value.lower()}; bu kimliği kullanma, gerekirse yeni "
         "öneri."
     )
+
+
+# --- okuma araçları ------------------------------------------------------------
+
+
+class NesneBulGirdisi(BaseModel):
+    """Alan adı ve değerle nesne ara; yeni nesne önermeden önce bununla bak."""
+
+    model_config = ConfigDict(frozen=True)
+
+    alan_adi: str | None = Field(
+        default=None, description="Aranan alan adı; normalizasyon yok, aynen yaz."
+    )
+    deger: Any = Field(
+        default=None, description="Değer; türüyle birebir karşılaştırılır."
+    )
+    deger_turu: sz.DegerTuru | None = None
+    seviye: int | None = Field(default=None, strict=True, ge=0)
+    durumlar: list[sz.NesneDurumu] = Field(
+        default=[sz.NesneDurumu.AKTIF, sz.NesneDurumu.ONAY_BEKLIYOR]
+    )
+    sayfa_siniri: int = Field(default=sz.VARSAYILAN_SAYFA_BOYUTU, strict=True)
+    sayfa_baslangici: int = Field(default=0, strict=True)
+
+
+class NesneGetirGirdisi(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    nesne_id: int = Field(strict=True, gt=0)
+
+
+class OturumBaglamiGirdisi(BaseModel):
+    """Oturum başında bir kez: son nesneler, alan adları, bekleyen işler (C16)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    son_nesne_sayisi: int = Field(default=20, strict=True, ge=1, le=100)
+
+
+def nesne_bul(
+    veritabani: Veritabani, girdi: NesneBulGirdisi, islem_kimligi: str
+) -> zarf.Zarf:
+    """Filtreye uyan nesneler ve özellikleri; eşleşme türüyle yapılır (C05)."""
+    sayfalama = sz.Sayfalama(girdi.sayfa_siniri, girdi.sayfa_baslangici)
+    with veritabani.okuma_islemi() as oturum:
+        nesneler_ = nesneler.nesne_bul(
+            oturum,
+            alan_adi=girdi.alan_adi,
+            deger=girdi.deger,
+            deger_turu=girdi.deger_turu,
+            seviye=girdi.seviye,
+            durumlar=girdi.durumlar,
+            sayfalama=sayfalama,
+        )
+        ozellikler = nesneler.ozellikleri_getir(oturum, [n.id for n in nesneler_])
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        icerik={
+            "nesneler": [_nesne_ozeti(n, ozellikler.get(n.id, ())) for n in nesneler_],
+            "sayfa": {
+                "sinir": sayfalama.sinir,
+                "baslangic": sayfalama.baslangic,
+                "donen": len(nesneler_),
+            },
+        },
+        sonraki_adim=(
+            "Mevcut nesnenin kimliğini kullan; aynı nesneyi yeniden önerme."
+            if nesneler_
+            else "Eşleşen nesne yok; belgede kanıtı varsa nesne_tanimla ile öner."
+        ),
+    )
+
+
+def nesne_getir(
+    veritabani: Veritabani, girdi: NesneGetirGirdisi, islem_kimligi: str
+) -> zarf.Zarf:
+    """Nesne, özellikleri (şart işaretli), üstleri ve altları."""
+    with veritabani.okuma_islemi() as oturum:
+        ayrinti = nesneler.nesne_getir(oturum, girdi.nesne_id)
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        nesne_id=ayrinti.nesne.id,
+        hedef_surumu=ayrinti.nesne.surum,
+        icerik={
+            **_nesne_ozeti(ayrinti.nesne, ayrinti.ozellikler),
+            "ust_idleri": list(ayrinti.ust_idleri),
+            "alt_idleri": list(ayrinti.alt_idleri),
+        },
+        sonraki_adim=_nesne_sonraki_adimi(ayrinti.nesne.durum),
+    )
+
+
+def oturum_baglami(
+    veritabani: Veritabani, girdi: OturumBaglamiGirdisi, islem_kimligi: str
+) -> zarf.Zarf:
+    """C16: kalıcı kimlikler DEFTERIKI'dedir; Cowork oturum başında bunları alır."""
+    with veritabani.okuma_islemi() as oturum:
+        son = nesneler.son_nesneleri_listele(oturum, sinir=girdi.son_nesne_sayisi)
+        ozellikler = nesneler.ozellikleri_getir(oturum, [n.id for n in son])
+        alan_adlari = nesneler.alan_adlarini_listele(oturum)
+        bekleyenler = onaylar.bekleyenleri_listele(oturum)
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        bekleyen=len(bekleyenler),
+        icerik={
+            "son_nesneler": [_nesne_ozeti(n, ozellikler.get(n.id, ())) for n in son],
+            "alan_adlari": [
+                {"alan_adi": ad, "kullanim": sayi} for ad, sayi in alan_adlari
+            ],
+            "bekleyen_isler": [
+                {
+                    "talep_id": t.id,
+                    "tur": t.tur.value,
+                    "hedef_id": t.hedef_id,
+                    "hedef_surumu": t.hedef_surumu,
+                    "olusturma_zamani": t.olusturma_zamani.isoformat(),
+                }
+                for t in bekleyenler
+            ],
+        },
+        sonraki_adim=(
+            "Bilinen kimlikleri doğrudan kullan; alan adlarını aynen kullan, eş "
+            "anlamlı ad icat etme; bekleyen işler kullanıcı kararı bekliyor, "
+            "onları yeniden önerme."
+        ),
+    )
+
+
+def _nesne_ozeti(
+    nesne: nesneler.Nesne, ozellikler: tuple[nesneler.Ozellik, ...]
+) -> dict[str, Any]:
+    return {
+        "id": nesne.id,
+        "seviye": nesne.seviye,
+        "durum": nesne.durum.value,
+        "surum": nesne.surum,
+        "ozellikler": [
+            {
+                "id": o.id,
+                "alan_adi": o.alan_adi,
+                "deger": o.deger,
+                "deger_turu": o.deger_turu.value,
+                "sart": o.sart,
+            }
+            for o in ozellikler
+        ],
+    }
 
 
 def _anahtar_zorunlu(anahtar: str | None) -> str:
