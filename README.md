@@ -7,8 +7,16 @@ DEFTERIKI'ye yazılır; uygulama kayıtları tutar, denetler ve gösterir.
 
 Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
-(veritabanı çekirdeği) sürüyor: Teslim 4.1–4.6 bitti, Aşama 4 kapısı
-(uçtan uca test, şemanın başlangıç akışına bağlanması) sırada. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
+(veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
+işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
+sürüyor: 5.1 (zarf, hata, işlem anahtarı) bitti; 5.2 üç parça (nesne
+araçları, belge/hareket araçları, durum/sorgu araçları) ve 5.3 (Cowork
+talimatı, gerçek ekstre) sırada. **Kararlar (2026-09-17, Abdüllatif):**
+`defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
+düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
+satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
+çağıran geçici arayüzdür, onay mekanizması terminale bağlanmaz); gerçek
+ekstre yerelde gelen dizininden, depoya girmez. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
 defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 4.3 buna göre yeniden kuruldu. Bitenler:
 
@@ -44,10 +52,17 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   yalnız `KAYITLI` belgeye dayanan bakiye ve hareket listesi
   (`finansal_kurallar.py`, `kayitlar.py`, `hesaplamalar.py`)
 
-Henüz yok: diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması
-(Aşama 7), GUI, ürün verisi yazan MCP aracı. Şema kurulu ama başlangıç akışına henüz bağlı değil: `uv run
-defteriki` veritabanı dosyası oluşturmaz, şema `semayi_yukselt` ile ya da
-`uv run alembic upgrade head` ile kurulur (bağlama Aşama 4 kapısında).
+* Aşama 4 kapısı: `uv run defteriki` ve `uv run defteriki-mcp` başlangıçta
+  şemayı kurar ya da sürümünü denetler (`baslangic.semayi_hazirla`); uçtan
+  uca işlev testi nesne onayından bakiyeye kadar zinciri tek testte doğrular
+  (`tests/test_asama4_kapisi.py`)
+
+* MCP yanıt zarfı ve güvenli hata çevirisi; ilk değişiklik aracı
+  `nesne_tanimla` (FORM/GONDER) MCP'de (`zarf.py`, `mcp_araclari.py`,
+  `mcp_kapisi.py`)
+
+Henüz yok: diğer MCP araçları (5.2), Cowork talimatı (5.3), diğer işlem
+sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7), GUI.
 
 ## Kurulum
 
@@ -71,10 +86,19 @@ uv run defteriki
 ```
 
 Komut sırayla ayarları ortam değişkenlerinden yükler, seçilen ortamın
-dizinlerini (veritabanı dizini, `belgeler/`, `logs/`) açar, teknik günlüğü
-kurar ve başlangıç olayını günlüğe yazar. Başarılıysa tek satırlık bir mesaj
-(ortam, veri kökü, günlük dosyası) basar ve `0` ile çıkar. Henüz veritabanı
-oluşturmaz; finansal iş yapmaz.
+dizinlerini (veritabanı dizini, `belgeler/`, `logs/`, `gelen/`) açar, teknik
+günlüğü kurar, veritabanı şemasını hazırlar ve başlangıç olayını günlüğe
+yazar. Başarılıysa tek satırlık bir mesaj (ortam, veri kökü, şema sürümü,
+günlük dosyası) basar ve `0` ile çıkar. Finansal iş yapmaz; ekran yok.
+
+**Şema hazırlığı (Aşama 4 kapısı).** Veritabanı dosyası ya da
+`alembic_version` yoksa yeni kurulumdur: migration'lar uygulanır, dosya
+oluşur, günlüğe `sema_kuruldu` düşer; yedeklenecek bir şey olmadığından bu
+adım otomatiktir. Şema kuruluysa sürümü uygulamanın beklediğiyle
+(`BEKLENEN_SEMA_SURUMU`) aynı olmalıdır; farklıysa başlangıç "Şema hatası"
+ile `1` döner ve hiçbir şey yazılmaz. Yükseltme açık bir adımdır: önce
+yedek, sonra `uv run alembic upgrade head`. MCP kapısı aynı hazırlığı
+kullanır; `sistem_durumu` gerçek şema sürümünü döndürür.
 
 Herhangi bir adım başarısızsa (`DEFTERIKI_ORTAM` bilinmeyen değer, test
 ortamında veri kökü verilmemiş, dizin yerine dosya var, log dosyası
@@ -96,13 +120,57 @@ ardından MCP sunucusunu stdin/stdout üzerinde çalıştırır. İstemci bağla
 kapatınca `0` ile çıkar. Hazırlık düşerse hata stderr'e yazılır, çıkış kodu
 `1` olur; stdout'a hiçbir şey yazılmaz.
 
-Bu sürümde tek araç var: `sistem_durumu`. Uygulama sürümü, ortam adı, şema
-sürümü (`yok`) ve yetenek listesini döndürür; yol, anahtar ya da ortam
-değişkeni içermez. Ürün verisi yazan araç henüz yoktur. Aşama 3'te kullanılan
-geçici deneme araçları (`dosya_dene`, `deneme_baslat`, `deneme_durumu`)
-kapı temizliğinde kaldırıldı; ne ölçtükleri "Cowork entegrasyonu"
-bölümünde. Gelen dizini ayarı (`DEFTERIKI_GELEN_DIZINI`) kaldı: Aşama 4'te
-belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapılır.
+Araçlar (`YETENEKLER`): `sistem_durumu` (uygulama sürümü, ortam, şema
+sürümü `0001`, yetenek listesi, talimat sürümü; yol ya da sır içermez) ve
+Teslim 5.1'den itibaren `nesne_tanimla` (FORM/GONDER). Diğer araçlar 5.2'de.
+Aşama 3'ün geçici deneme araçları kaldırıldı; ne ölçtükleri "Cowork
+entegrasyonu" bölümünde. Gelen dizini ayarı (`DEFTERIKI_GELEN_DIZINI`)
+kaldı: belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapılır.
+
+### Yanıt zarfı ve hata (Teslim 5.1)
+
+Her araç aynı zarfı döndürür (`src/defteriki/zarf.py`, Pydantic; SDK JSON
+Schema üretir): `durum` TAMAMLANDI / BEKLIYOR / REDDEDILDI / YENIDEN_DENE;
+`islem_kimligi` (çağrı başına korelasyon kimliği, günlükteki `mcp_arac`
+satırıyla eşleşir); `talimat_surumu` (`docs/cowork.md`, şimdilik `0.1`);
+`belge_id`, `okuma_id`, `nesne_id`, `talep_id`, `hedef_surumu`; `yazilan`,
+`zaten_mevcut`, `bekleyen` sayıları; `belge_kaydi` TANIMLANMADI / KAYITLI;
+`sonraki_adim` (Cowork'a kısa yönerge); `icerik` (aracın kendi sonucu);
+`hata` (kod, güvenli mesaj, alan, konum, tekrar denenebilirlik).
+**"Başarılı" tek başına "kayıtlı" demek değildir**; `belge_kaydi` KAYITLI
+olmadan yazılanlar hesaba girmez (K19).
+
+Hata çevirisi (`mcp_kapisi.araci_calistir`): ürün hatası kodlu REDDEDILDI;
+`VERITABANI_MESGUL` YENIDEN_DENE ("aynı anahtarla tekrar dene, yeni anahtar
+üretme"); beklenmeyen hata `BEKLENMEYEN_HATA` (mesaj zarfa girmez, türü
+günlüğe, korelasyon kimliğiyle). SDK'nın kendi girdi doğrulama hatası
+(`ToolError`) dışarı verilmez: metni Pydantic'in `input_value` dökümünü
+içerir, yani belge içeriği ya da kimlik bilgisi sızabilir.
+`DefterikiSunucusu.call_tool` onu yakalar, `ValidationError.errors`'dan
+yalnız alan yollarını ve hata türlerini alır (`girdi.ust_idleri.0
+(int_type)` gibi) ve `GIRDI_GECERSIZ` zarfı döndürür; değer ne zarfa ne
+günlüğe girer. Bilinmeyen araç adı SDK hatasıyla döner.
+
+Araç gövdeleri `src/defteriki/mcp_araclari.py`de: kural yok (K01); girdi
+modelini alır, işlem sahibi olarak yazma/okuma işlemini açar, Aşama 4
+işlevini çağırır, zarfı döndürür; sunucudan bağımsız test edilir. Her
+değişiklik yapan araçta `islem_anahtari` zorunludur (K08); eksikse
+`GIRDI_GECERSIZ` (alan `islem_anahtari`), aynı anahtar aynı içerik aynı
+sonuç, farklı içerik `ANAHTAR_ICERIK_CAKISMASI`. MCP'den gelen her yazmanın
+aktörü `COWORK`. `nesne_tanimla`: `adim=FORM` boş form ve kuralları
+(veritabanına dokunmaz); `adim=GONDER` nesneyi `ONAY_BEKLIYOR` yazar, zarf
+BEKLIYOR + `talep_id` + `hedef_surumu`, `sonraki_adim` "kullanıcı kararı
+bekleniyor; islem_durumu ile sonra sor, kendi kendine onay üretme".
+Nesne AKTIF ise TAMAMLANDI, silinmişse REDDEDILDI (hata yok, `icerik`
+söyler).
+
+Test (`tests/test_mcp_araclari.py`): FORM veritabanına dokunmaz; GONDER
+BEKLIYOR + talep kimliği; anahtarsız GONDER ret; aynı anahtar aynı sonuç,
+farklı içerik çakışma; ürün hatası kod ve alanıyla; veritabanı meşgulken
+YENIDEN_DENE; beklenmeyen hata mesajı zarfa girmez, türü günlüğe; zarfta yol
+ve ortam değişkeni yok; sunucu üzerinden şema reddi değerleri dışarı
+vermez; bilinmeyen araç; araç listesi ve şemalar; sunucu üzerinden GONDER.
+stdio testi (`test_mcp_kapisi.py`) iki aracı ve `talimat_surumu`nu görür.
 
 Kurallar:
 
@@ -239,6 +307,9 @@ migration'ları tek yazma işleminde (`BEGIN IMMEDIATE`) uygular, ardından
 `foreign_key_check` ve `integrity_check` çalıştırır. Komut satırı:
 `uv run alembic upgrade head` (yol `DEFTERIKI_*` ayarlarından;
 `alembic.ini`'de URL yok, yollar `%(here)s` ile ini dosyasına göre).
+
+Başlangıç akışı şemayı kendisi hazırlar (bkz. "Başlatma"): yeni kurulumda
+kurar, kuruluysa denetler, yabancı sürümde durur.
 
 Test (`tests/test_sema.py`): boş veritabanına kurulum on beş tablo, hiçbir
 tabloda defter kimliği yok; `foreign_key_check`/`integrity_check` temiz;
@@ -552,6 +623,22 @@ başka eksen karışmaz; `GECERSIZ` kayıt, kaldırılmış kaynak desteği ve
 listesi sıralı, filtreli, sayfalı; Hypothesis: rastgele ARTTIR/AZALT dizisi
 için kayıt öncesi bakiye 0, sonrası ARTTIR − AZALT, bekleyen sayısı geçişi.
 
+## Aşama 4 kapısı: uçtan uca test
+
+`tests/test_asama4_kapisi.py` gerçek başlangıç akışıyla (`ortami_hazirla`
+şemayı kurar, yollar ayarlardan) zinciri tek testte yürütür: Garanti BBVA ve
+ME hesabı `ONAY_BEKLIYOR` yazılır, kullanıcı şart seçip onaylar (`ad`,
+`iban`) → ekstre gelen dizinine bırakılır, arşivlenir, belge `ARSIVLENDI` →
+okuma açılır (`OKUNUYOR`) → üç hareket ve bir kapsam dışı başlık satırı
+yazılır; bakiye sıfır, üç kayıt bekliyor (K19) → `okuma_tamamla`; uygulama
+belge kaydını tanımlar, `KAYITLI` → bakiye 1.250,00 TL, tarih sınırı, banka
+nesnesinde hareket yok → aynı ekstre ikinci kez gelince aynı belge, ikinci
+etki yok (K18); tablo sayıları ve işlem anahtarı sayısı doğrulanır. İkinci
+test: uygulama kapanıp açılınca veri yerinde, şema yeniden kurulmaz.
+Başlangıç testleri: ilk başlatma şemayı kurar ve on beş tabloyu açar, ikinci
+başlatma kurmaz, yabancı sürümde (`0000`) `1` ile durur ve "yedek" der; MCP
+stdio testi `sema_surumu=0001` görür.
+
 ## Teknik hata günlüğü
 
 Günlük yalnızca ayarlardaki log dizinine yazar: `<log dizini>/defteriki.log`
@@ -637,9 +724,11 @@ Kurallar:
 ```
 src/defteriki/    uygulama paketi
   ayarlar.py      merkezi ayarlar (ortam, yollar)
-  baslangic.py    uv run defteriki giriş noktası; ortak hazırlık (ortami_hazirla)
+  baslangic.py    uv run defteriki giriş noktası; ortak hazırlık (ortami_hazirla: ayarlar, dizinler, günlük, şema)
   gunluk.py       teknik hata günlüğü
-  mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu ve araçları
+  mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu, araç kaydı, güvenli hata çevirisi
+  mcp_araclari.py MCP araç gövdeleri: girdi modeli → Aşama 4 işlevi → zarf
+  zarf.py         ortak MCP yanıt zarfı ve hata çevirisi
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
   sema.py         on beş tablo (METADATA), şema sürümü denetimi ve yükseltme

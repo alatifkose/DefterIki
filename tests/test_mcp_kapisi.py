@@ -21,7 +21,8 @@ import anyio
 import pytest
 
 from defteriki import ayarlar as ay
-from defteriki import gunluk, mcp_kapisi, sema
+from defteriki import gunluk, mcp_kapisi, sema, zarf
+from defteriki import veritabani as vt
 
 DEFTERIKI_DEGISKENLERI = (
     ay.ORTAM_DEGISKENI,
@@ -81,7 +82,7 @@ def test_sistem_durumu_beklenen_alanlari_tasir(test_koku: Path) -> None:
 
     assert durum.ortam == "test"
     assert durum.sema_surumu == "0001"
-    assert durum.yetenekler == [mcp_kapisi.ARAC_SISTEM_DURUMU]
+    assert durum.yetenekler == list(mcp_kapisi.YETENEKLER)
     assert durum.uygulama_surumu not in ("", mcp_kapisi.SURUM_BILINMIYOR)
 
 
@@ -95,20 +96,25 @@ def test_sistem_durumu_yol_ve_ortam_degiskeni_icermez(test_koku: Path) -> None:
     assert "DEFTERIKI_" not in metin
 
 
-def test_sunucu_yalniz_sistem_durumu_aracini_sunar(test_koku: Path) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ay.ayarlari_yukle(), "0001")
+def test_sunucu_araclari_sunar(test_koku: Path) -> None:
+    ayarlar = ay.ayarlari_yukle()
+    veritabani = vt.Veritabani(test_koku / "mcp.sqlite3")
+    try:
+        sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", veritabani)
+        araclar = anyio.run(sunucu.list_tools)
+    finally:
+        veritabani.kapat()
 
-    araclar = anyio.run(sunucu.list_tools)
-
-    assert [arac.name for arac in araclar] == [mcp_kapisi.ARAC_SISTEM_DURUMU]
+    assert [arac.name for arac in araclar] == list(mcp_kapisi.YETENEKLER)
     assert sunucu.name == mcp_kapisi.SUNUCU_ADI
-    (arac,) = araclar
-    assert arac.output_schema is not None
-    assert set(arac.output_schema["required"]) == {
+    durum = araclar[0]
+    assert durum.output_schema is not None
+    assert set(durum.output_schema["required"]) == {
         "uygulama_surumu",
         "ortam",
         "sema_surumu",
         "yetenekler",
+        "talimat_surumu",
     }
 
 
@@ -225,8 +231,9 @@ def test_stdio_uzerinden_baslatma_arac_listesi_ve_cagri(
     assert baslangic["protocolVersion"]
 
     araclar = yanitlar[2]["result"]["tools"]
-    assert [arac["name"] for arac in araclar] == [mcp_kapisi.ARAC_SISTEM_DURUMU]
+    assert [arac["name"] for arac in araclar] == list(mcp_kapisi.YETENEKLER)
     assert araclar[0]["inputSchema"]["properties"] == {}
+    assert "girdi" in araclar[1]["inputSchema"]["properties"]
 
     cagri = yanitlar[3]["result"]
     assert not cagri.get("isError", False)
@@ -234,7 +241,8 @@ def test_stdio_uzerinden_baslatma_arac_listesi_ve_cagri(
         "uygulama_surumu": mcp_kapisi.uygulama_surumu(),
         "ortam": "test",
         "sema_surumu": sema.BEKLENEN_SEMA_SURUMU,
-        "yetenekler": [mcp_kapisi.ARAC_SISTEM_DURUMU],
+        "yetenekler": list(mcp_kapisi.YETENEKLER),
+        "talimat_surumu": zarf.TALIMAT_SURUMU,
     }
     assert all(str(test_koku) not in satir for satir in sonuc.stdout_satirlari)
     assert not any(calisma.iterdir())
