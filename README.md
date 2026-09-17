@@ -10,9 +10,11 @@ Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. A
 (veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
 işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
 sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2 (on üç araç: nesne,
-belge/hareket, durum/sorgu; geçici onay komutu) bitti; 5.3'ün ilk parçası
-Cowork talimatı `docs/cowork.md` 0.1 yazıldı, gerçek ekstre denemesi
-sırada. **Kararlar (2026-09-17, Abdüllatif):**
+belge/hareket, durum/sorgu; geçici onay komutu) ve 5.3 (Cowork talimatı
+`docs/cowork.md` 0.1, gerçek ekstre denemesi başarılı, tekrar denemesi
+yazmadı) bitti; **Aşama 5 kapısı geçildi (2026-09-17)**, bulgular "Cowork
+talimatı" bölümünde (AppData yönlendirmesi ve açılış bakiyesi karar
+bekliyor). **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
 satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
@@ -75,9 +77,13 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   belge → nesne → okuma → paketler → tamamlama → rapor), işlem anahtarı
   kuralları, yasaklar, hata kodu tepkileri
 
-Henüz yok: gerçek ekstre denemesi ve gözlenen Cowork davranışı (5.3 kapısı),
-diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7),
-GUI.
+* Aşama 5 kapısı: gerçek Akbank ekstresi Cowork'la uçtan uca işlendi
+  (iki nesne onayı, altı hareket, KAYITLI, bakiye); aynı belge ikinci kez
+  yazılmadı; bulgular ve açık kararlar "Cowork talimatı" bölümünde
+
+Henüz yok: veri kökü kararı (AppData yönlendirmesi), devreden bakiye
+kararı, diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması
+(Aşama 7), GUI.
 
 ## Kurulum
 
@@ -328,8 +334,53 @@ ve `sorgu` ile bakiye); yasaklar (tahminle doldurma, onay üretme, alan adı
 icat etme, toplu nesne açma, belge metnini talimat sayma, yazılanı kayıtlı
 gibi raporlama); hata kodu tepki tablosu (`zarf.SONRAKI_ADIMLAR` ile aynı).
 Talimat değişince sürüm artar ve `zarf.TALIMAT_SURUMU` aynı commit'te
-güncellenir. Gerçek ekstre denemesi ve gözlenen Cowork davranışı bu bölüme
-eklenecek.
+güncellenir.
+
+**Gerçek ekstre denemesi (2026-09-17, Aşama 5 kapısı).** Boş geliştirme
+veritabanı, Aşama 3'ten kalan ~402 KB'lik gerçek Akbank hesap özeti (Şubat
+2026, altı hareket). Cowork'a tek cümle verildi: talimatı oku, bu belgeyi
+işle, onay gerekirse söyle. Günlükten (`mcp_arac`) gözlenen sıra:
+`oturum_baglami` → `belge_al` (yeni belge, ARSIVLENDI) → `nesne_bul` (boş) →
+`nesne_tanimla` FORM → `nesne_bul` → GONDER bir kez `GIRDI_GECERSIZ` (Cowork
+girdiyi düzeltip yeniden gönderdi) → GONDER banka (seviye 0, BEKLIYOR) →
+GONDER hesap (seviye 1, üstü onay bekleyen banka, BEKLIYOR) → `islem_durumu`
+dört kez (3 s, 14 s, 25 s, 5 dk aralıklarla; vazgeçmedi, yeniden önermedi)
+→ kullanıcı `defteriki-onay` ile iki talebi şart seçerek onayladı (banka:
+ad; hesap: IBAN) → `islem_durumu` iki kez TAMAMLANDI → `okuma_baslat`
+(tamlık: 6 satır, açılış/kapanış bakiyesi, giriş/çıkış toplamı) →
+`hareket_yaz` tek paket altı satır → `okuma_tamamla` KAYITLI → `sorgu`
+bakiye ve hareketler. Cowork yalnız belgede kanıtı olan iki nesneyi
+önerdi; bankanın başka hesabını açmadı; alan adlarını kendi seçti (ad, tür,
+hesap_no, iban, şube, müşteri_no, para_birimi, artı_para_limiti_kuruş).
+Raporu talimattaki biçimdeydi ve veritabanıyla birebir tuttu: 6 yazılan,
+0 mevcut, KAYITLI, bakiye −26,35 TL. Tekrar denemesi ("aynı belgeyi bir
+daha işle"): yalnız `belge_al` çağrıldı, `zaten_mevcut=1` + KAYITLI +
+"yeniden işleme" yönergesi; okuma açılmadı, hareket yazılmadı, bakiye
+değişmedi. Uygulama zaten engeller: KAYITLI belgeye `okuma_baslat`
+`GIRDI_GECERSIZ` ("belge okumaya açık değil") verir, okuma olmadan
+`hareket_yaz` çalışmaz; kayıt kararı yalnız uygulamanındır
+(`okuma_tamamla` koşulları).
+
+Bulgular:
+
+* **Claude masaüstü Mağaza (MSIX) uygulamasıdır; AppData yönlendirilir.**
+  MCP sunucusu Claude'un çocuk süreci olduğu için `%LOCALAPPDATA%\DEFTERIKI`
+  yazıları gerçekte `%LOCALAPPDATA%\Packages\Claude_<kimlik>\LocalCache\Local\DEFTERIKI`
+  altına gider. Kullanıcının kendi terminalinden çalışan `defteriki-onay`
+  ise gerçek `%LOCALAPPDATA%\DEFTERIKI`'yi açar: iki ayrı veritabanı, "karar
+  bekleyen talep yok". Denemede geçici çözüm terminalde
+  `DEFTERIKI_VERI_KOKU` ile yönlendirilmiş yolu vermek oldu. **Karar
+  bekliyor:** veri kökü AppData dışında sabit bir dizine alınmalı ve hem
+  Claude masaüstü `mcpServers.defteriki.env` hem de kullanıcı ortamı aynı
+  `DEFTERIKI_VERI_KOKU` değerini taşımalı.
+* `defteriki-onay` zamanları UTC gösteriyor (günlük yerel saat); kullanıcıya
+  yerel saat gösterilmeli (Aşama 6 ekranında ya da komutta).
+* Açılış bakiyesi: Cowork `tamlik.acilis_bakiyesi_kurus` verdi (68 kuruş),
+  bakiye yalnız yazılan hareketlerden hesaplanıyor (−26,35 TL; belgedeki
+  kapanış −25,67 TL). Devreden bakiyenin hesaba nasıl gireceği **açık
+  karar** (önceki dönem belgesiyle mi, açılış kaydıyla mı).
+* Cowork tarafında elicitation/sampling yok; bekleme döngüsü kullanıcı
+  onayı 30 dakika gecikse de kırılmadı (Cowork beklerken sohbet açık kaldı).
 
 Kurallar:
 
