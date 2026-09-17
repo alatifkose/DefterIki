@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +26,7 @@ SIMDI = datetime(2026, 9, 17, 10, 0)
 COWORK = sz.DenetimAktoru.COWORK
 PDF = b"%PDF-1.7\n%sentetik ekstre\n"
 SEMA = "cowork-0.1"
+TD = sz.TamlikDurumu
 Satir = bl.SatirGirdisi
 
 
@@ -97,7 +99,7 @@ def _okuma_baslat(
             islem_anahtari=anahtar,
             aktor=COWORK,
             icerik=icerik,
-            tamlik=tamlik,
+            tamlik=tamlik if tamlik is not None else _tamlik(),
             simdi=SIMDI,
         )
 
@@ -144,6 +146,29 @@ def _hazir_okuma(
     belge = _belge_al(db, gelen, arsiv_dizini).belge
     okuma = _okuma_baslat(db, belge.id, arsiv_dizini)
     return belge, okuma
+
+
+def _tamlik(
+    satir: int | None = 0,
+    acilis: int | None = None,
+    kapanis: int | None = None,
+    giris: int | None = None,
+    cikis: int | None = None,
+) -> bl.Tamlik:
+    """Test tamlığı: sayı DEGER, verilmeyen BELGEDE_YOK, satır None OKUNAMADI."""
+
+    def alan(v: int | None) -> bl.TamlikAlani:
+        return bl.TamlikAlani.sayi(v) if v is not None else bl.BELGEDE_YOK
+
+    return bl.Tamlik(
+        beklenen_satir_sayisi=(
+            bl.TamlikAlani.sayi(satir) if satir is not None else bl.OKUNAMADI
+        ),
+        acilis_bakiyesi_kurus=alan(acilis),
+        kapanis_bakiyesi_kurus=alan(kapanis),
+        toplam_giris_kurus=alan(giris),
+        toplam_cikis_kurus=alan(cikis),
+    )
 
 
 def _satir(n: int, **ham: object) -> bl.SatirGirdisi:
@@ -195,15 +220,13 @@ def test_belge_akisi_arsivden_kayitliya(
         db,
         alinan.belge.id,
         arsiv_dizini,
-        tamlik=bl.Tamlik(beklenen_satir_sayisi=5, kapanis_bakiyesi_kurus=-2500),
+        tamlik=_tamlik(satir=5, kapanis=-2500),
         icerik={"donem": "2026-08", "hesap": "ME"},
     )
     assert okuma.durum is sz.OkumaDurumu.ACIK
     assert okuma.surum_no == 1 and okuma.sema_surumu == SEMA
     assert okuma.icerik == {"donem": "2026-08", "hesap": "ME"}
-    assert okuma.tamlik == bl.Tamlik(
-        beklenen_satir_sayisi=5, kapanis_bakiyesi_kurus=-2500
-    )
+    assert okuma.tamlik == _tamlik(satir=5, kapanis=-2500)
     belge = _belge(db, alinan.belge.id)
     assert belge.durum is sz.BelgeDurumu.OKUNUYOR and belge.surum == 2
 
@@ -382,7 +405,7 @@ def test_okunuyor_ya_da_kayitli_belgede_ikinci_okuma_acilmaz(
         _okuma_baslat(db, belge.id, arsiv_dizini, anahtar="ob-2")
 
     _gonder(db, okuma.id, [_satir(0)])
-    _tamamla(db, okuma.id)
+    _tamamla(db, okuma.id, tamlik=_tamlik(satir=1))
     with pytest.raises(sz.GirdiGecersiz, match="KAYITLI"):
         _okuma_baslat(db, belge.id, arsiv_dizini, anahtar="ob-3")
     assert _sayi(db, sema.okuma) == 1
@@ -415,30 +438,75 @@ def test_sema_surumu_gecersiz(
 
 
 @pytest.mark.parametrize(
-    "tamlik",
+    ("tamlik", "alan"),
     [
-        bl.Tamlik(beklenen_satir_sayisi=-1),
-        bl.Tamlik(beklenen_satir_sayisi=True),  # pyright: ignore[reportArgumentType]
-        bl.Tamlik(toplam_giris_kurus=-5),
-        bl.Tamlik(kapanis_bakiyesi_kurus=12.5),  # pyright: ignore[reportArgumentType]
+        (_tamlik(satir=-1), "beklenen_satir_sayisi"),
+        (_tamlik(satir=True), "beklenen_satir_sayisi"),  # bool sayı değil
+        (_tamlik(giris=-5), "toplam_giris_kurus"),
+        (_tamlik(kapanis=12.5), "kapanis_bakiyesi_kurus"),  # pyright: ignore[reportArgumentType]
+        (
+            replace(_tamlik(), toplam_giris_kurus=bl.TamlikAlani(TD.BELGEDE_YOK, 5)),
+            "toplam_giris_kurus",
+        ),  # BELGEDE_YOK ile değer
+        (
+            replace(_tamlik(), toplam_cikis_kurus=bl.TamlikAlani(TD.OKUNAMADI, 0)),
+            "toplam_cikis_kurus",
+        ),  # OKUNAMADI ile değer
+        (
+            replace(_tamlik(), beklenen_satir_sayisi=bl.BELGEDE_YOK),
+            "beklenen_satir_sayisi",
+        ),
+        (
+            replace(
+                _tamlik(),
+                acilis_bakiyesi_kurus=bl.TamlikAlani("BILINMIYOR"),  # pyright: ignore[reportArgumentType]
+            ),
+            "acilis_bakiyesi_kurus",
+        ),  # bilinmeyen durum
+        (
+            replace(_tamlik(), toplam_cikis_kurus=None),  # pyright: ignore[reportArgumentType]
+            "toplam_cikis_kurus",
+        ),  # alan hiç yok
     ],
 )
 def test_tamlik_gecersiz(
-    db: vt.Veritabani, gelen: Path, arsiv_dizini: Path, tamlik: bl.Tamlik
+    db: vt.Veritabani, gelen: Path, arsiv_dizini: Path, tamlik: bl.Tamlik, alan: str
 ) -> None:
     belge = _belge_al(db, gelen, arsiv_dizini).belge
-    with pytest.raises(sz.GirdiGecersiz, match="tamlık"):
+    with pytest.raises(sz.GirdiGecersiz) as hata:
         _okuma_baslat(db, belge.id, arsiv_dizini, tamlik=tamlik)
+    assert hata.value.alan == alan
     assert _sayi(db, sema.okuma) == 0
 
 
-def test_tamlik_negatif_bakiye_kabul(
+def test_tamlik_zorunlu(db: vt.Veritabani, gelen: Path, arsiv_dizini: Path) -> None:
+    belge = _belge_al(db, gelen, arsiv_dizini).belge
+    with db.yazma_islemi() as oturum:
+        with pytest.raises(sz.GirdiGecersiz) as hata:
+            bl.okuma_baslat(
+                oturum,
+                belge_id=belge.id,
+                sema_surumu=SEMA,
+                belge_dizini=arsiv_dizini,
+                islem_anahtari="ob-1",
+                aktor=COWORK,
+                simdi=SIMDI,
+            )
+    assert hata.value.alan == "tamlik"
+    assert _sayi(db, sema.okuma) == 0
+
+
+def test_tamlik_negatif_bakiye_kabul_ve_uc_durum_kayipsiz_doner(
     db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
 ) -> None:
     belge = _belge_al(db, gelen, arsiv_dizini).belge
-    tamlik = bl.Tamlik(acilis_bakiyesi_kurus=-100, kapanis_bakiyesi_kurus=-250)
+    tamlik = replace(
+        _tamlik(satir=None, acilis=-100, kapanis=-250),
+        toplam_giris_kurus=bl.BELGEDE_YOK,
+    )
     okuma = _okuma_baslat(db, belge.id, arsiv_dizini, tamlik=tamlik)
     assert okuma.tamlik == tamlik
+    assert _okuma(db, okuma.id).tamlik == tamlik  # JSON'dan geri okununca aynı
 
 
 # --- gönderim (K07, S11) ------------------------------------------------------------
@@ -519,7 +587,7 @@ def test_kapali_okumaya_satir_gonderilmez(
 ) -> None:
     _, okuma = _hazir_okuma(db, gelen, arsiv_dizini)
     _gonder(db, okuma.id, [_satir(0)], anahtar="p1")
-    _tamamla(db, okuma.id)
+    _tamamla(db, okuma.id, tamlik=_tamlik(satir=1))
 
     with pytest.raises(sz.GirdiGecersiz, match="TAMAMLANDI"):
         _gonder(db, okuma.id, [_satir(1)], anahtar="p2")
@@ -533,9 +601,7 @@ def test_mutabakat_farki_hicbir_durumu_degistirmez(
     db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
 ) -> None:
     belge = _belge_al(db, gelen, arsiv_dizini).belge
-    okuma = _okuma_baslat(
-        db, belge.id, arsiv_dizini, tamlik=bl.Tamlik(beklenen_satir_sayisi=3)
-    )
+    okuma = _okuma_baslat(db, belge.id, arsiv_dizini, tamlik=_tamlik(satir=3))
     _gonder(db, okuma.id, [_satir(0), _satir(1)], anahtar="p1")
 
     with pytest.raises(sz.MutabakatFarki, match="beklenen satır sayısı 3, yazılan 2"):
@@ -555,25 +621,84 @@ def test_tamamlarken_verilen_tamlik_okumadakinin_yerine_gecer(
     db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
 ) -> None:
     belge = _belge_al(db, gelen, arsiv_dizini).belge
-    okuma = _okuma_baslat(
-        db, belge.id, arsiv_dizini, tamlik=bl.Tamlik(beklenen_satir_sayisi=9)
-    )
+    okuma = _okuma_baslat(db, belge.id, arsiv_dizini, tamlik=_tamlik(satir=9))
     _gonder(db, okuma.id, [_satir(0), _satir(1)])
 
-    yeni = bl.Tamlik(beklenen_satir_sayisi=2, kapanis_bakiyesi_kurus=500)
+    yeni = _tamlik(satir=2, kapanis=500)
     sonuc = _tamamla(db, okuma.id, tamlik=yeni)
 
     assert sonuc.okuma.tamlik == yeni
     assert sonuc.belge.durum is sz.BelgeDurumu.KAYITLI
 
 
-def test_tamlik_yoksa_satir_sayisi_denetlenmez(
+def test_okunamadi_belgeyi_kayitli_yapmaz_yeniden_tamlikla_kayitli_olur(
     db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
 ) -> None:
-    _, okuma = _hazir_okuma(db, gelen, arsiv_dizini)
-    sonuc = _tamamla(db, okuma.id)  # sıfır satır, tamlık bilgisi yok
+    belge = _belge_al(db, gelen, arsiv_dizini).belge
+    okuma = _okuma_baslat(
+        db,
+        belge.id,
+        arsiv_dizini,
+        tamlik=_tamlik(satir=None),  # sayılamadı
+    )
+    _gonder(db, okuma.id, [_satir(0), _satir(1)])
+
+    with pytest.raises(sz.BelgeHazirDegil) as hata:
+        _tamamla(db, okuma.id, anahtar="ot-1")
+    assert hata.value.alan == "beklenen_satir_sayisi"
+    assert "okunamadı" in str(hata.value)
+    assert _okuma(db, okuma.id).durum is sz.OkumaDurumu.ACIK
+    assert _belge(db, belge.id).durum is sz.BelgeDurumu.OKUNUYOR
+
+    sonuc = _tamamla(db, okuma.id, anahtar="ot-2", tamlik=_tamlik(satir=2))
     assert sonuc.belge.durum is sz.BelgeDurumu.KAYITLI
-    assert sonuc.okuma.tamlik is None
+    assert sonuc.okuma.tamlik == _tamlik(satir=2)
+
+
+def test_belgede_yok_denetimi_atlar_ve_kayit_olayina_yazar(
+    db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
+) -> None:
+    belge = _belge_al(db, gelen, arsiv_dizini).belge
+    okuma = _okuma_baslat(
+        db, belge.id, arsiv_dizini, tamlik=_tamlik(satir=1, kapanis=500)
+    )
+    _gonder(db, okuma.id, [_satir(0)])
+
+    sonuc = _tamamla(db, okuma.id)
+
+    assert sonuc.belge.durum is sz.BelgeDurumu.KAYITLI
+    with db.okuma_islemi() as oturum:
+        gerekce = oturum.execute(
+            select(sema.denetim_olay.c.gerekce).where(
+                sema.denetim_olay.c.eylem == bl.EYLEM_BELGE_KAYDET
+            )
+        ).scalar_one()
+    assert gerekce == (
+        f"etkin okuma {okuma.id}; atlanan denetimler: toplam_giris_kurus BELGEDE_YOK; "
+        "toplam_cikis_kurus BELGEDE_YOK; kapanış eşitliği (acilis_bakiyesi_kurus "
+        "BELGEDE_YOK)"
+    )
+
+
+def test_hicbir_denetim_atlanmadiysa_kayit_olayi_sade(
+    db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
+) -> None:
+    _, okuma = _hazir_okuma(db, gelen, arsiv_dizini)  # sıfır satır, satır sayısı 0
+    okuma = _okuma(db, okuma.id)
+    with db.yazma_islemi() as oturum:
+        oturum.execute(
+            sema.okuma.update()
+            .where(sema.okuma.c.id == okuma.id)
+            .values(tamlik=bl._tamligi_dogrula(_tamlik(0, 100, 100, 0, 0)))  # pyright: ignore[reportPrivateUsage]
+        )
+    _tamamla(db, okuma.id)
+    with db.okuma_islemi() as oturum:
+        gerekce = oturum.execute(
+            select(sema.denetim_olay.c.gerekce).where(
+                sema.denetim_olay.c.eylem == bl.EYLEM_BELGE_KAYDET
+            )
+        ).scalar_one()
+    assert gerekce == f"etkin okuma {okuma.id}"
 
 
 def test_tamamlanmis_okuma_yeniden_tamamlanmaz_ayni_anahtar_sakli(
@@ -581,12 +706,12 @@ def test_tamamlanmis_okuma_yeniden_tamamlanmaz_ayni_anahtar_sakli(
 ) -> None:
     _, okuma = _hazir_okuma(db, gelen, arsiv_dizini)
     _gonder(db, okuma.id, [_satir(0)])
-    ilk = _tamamla(db, okuma.id, anahtar="ot-1")
-    tekrar = _tamamla(db, okuma.id, anahtar="ot-1")
+    ilk = _tamamla(db, okuma.id, anahtar="ot-1", tamlik=_tamlik(satir=1))
+    tekrar = _tamamla(db, okuma.id, anahtar="ot-1", tamlik=_tamlik(satir=1))
     assert tekrar.belge.surum == ilk.belge.surum == 4
 
     with pytest.raises(sz.GirdiGecersiz, match="zaten sonuçlanmış"):
-        _tamamla(db, okuma.id, anahtar="ot-2")
+        _tamamla(db, okuma.id, anahtar="ot-2", tamlik=_tamlik(satir=1))
 
 
 def test_hata_her_seyi_geri_alir(
@@ -603,7 +728,11 @@ def test_hata_her_seyi_geri_alir(
                 aktor=COWORK,
             )
             bl.okuma_tamamla(
-                oturum, okuma_id=okuma.id, islem_anahtari="ot-1", aktor=COWORK
+                oturum,
+                okuma_id=okuma.id,
+                islem_anahtari="ot-1",
+                aktor=COWORK,
+                tamlik=_tamlik(satir=1),
             )
             raise RuntimeError("sonra patladı")
 
@@ -616,7 +745,8 @@ def _hazir_belge(
     db: vt.Veritabani, gelen: Path, arsiv_dizini: Path
 ) -> tuple[bl.Belge, bl.Okuma]:
     """HAZIR belge ve TAMAMLANDI okuma (Aşama 7'de karar sonrası kalacak hâl)."""
-    belge, okuma = _hazir_okuma(db, gelen, arsiv_dizini)
+    belge = _belge_al(db, gelen, arsiv_dizini).belge
+    okuma = _okuma_baslat(db, belge.id, arsiv_dizini, tamlik=_tamlik(satir=1))
     _gonder(db, okuma.id, [_satir(0)])
     with db.yazma_islemi() as oturum:
         oturum.execute(

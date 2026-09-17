@@ -18,6 +18,22 @@ EKSTRE = b"%PDF-1.7\n%sentetik ekstre 5.2/3\n"
 Oz = mcp_araclari.OzellikGirdi
 
 
+def _tamlik_girdi(satir: int | None) -> mcp_araclari.TamlikGirdi:
+    """Satır sayısı DEGER (None → OKUNAMADI), diğer dört alan BELGEDE_YOK."""
+    yok = mcp_araclari.TamlikAlaniGirdi(durum="BELGEDE_YOK")
+    return mcp_araclari.TamlikGirdi(
+        beklenen_satir_sayisi=(
+            mcp_araclari.TamlikAlaniGirdi(durum="DEGER", deger=satir)
+            if satir is not None
+            else mcp_araclari.TamlikAlaniGirdi(durum="OKUNAMADI")
+        ),
+        acilis_bakiyesi_kurus=yok,
+        kapanis_bakiyesi_kurus=yok,
+        toplam_giris_kurus=yok,
+        toplam_cikis_kurus=yok,
+    )
+
+
 @pytest.fixture
 def baglam(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -165,7 +181,11 @@ def test_paket_anahtari_satir_kayitlariyla_doner(
         baglam, mcp_araclari.BelgeAlGirdisi(yol=str(dosya), islem_anahtari="al"), "k"
     )
     mcp_araclari.okuma_baslat(
-        baglam, mcp_araclari.OkumaBaslatGirdisi(belge_id=1, islem_anahtari="ob"), "k"
+        baglam,
+        mcp_araclari.OkumaBaslatGirdisi(
+            belge_id=1, islem_anahtari="ob", tamlik=_tamlik_girdi(None)
+        ),
+        "k",
     )
     mcp_araclari.hareket_yaz(
         baglam,
@@ -286,7 +306,9 @@ def kayitli_hesap(baglam: mcp_araclari.AracBaglami) -> int:
         okuma = mcp_araclari.okuma_baslat(
             baglam,
             mcp_araclari.OkumaBaslatGirdisi(
-                belge_id=belge.belge_id, islem_anahtari=f"ob-{ay_adi}"
+                belge_id=belge.belge_id,
+                islem_anahtari=f"ob-{ay_adi}",
+                tamlik=_tamlik_girdi(len(hareketler)),
             ),
             "k",
         )

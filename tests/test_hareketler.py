@@ -102,6 +102,22 @@ def _hareket(n: int, hesap: int, yon: str, tutar: int, gun: int) -> Any:
     )
 
 
+def _tamlik_girdi(satir: int | None) -> mcp_araclari.TamlikGirdi:
+    """Satır sayısı DEGER (None → OKUNAMADI), diğer dört alan BELGEDE_YOK."""
+    yok = mcp_araclari.TamlikAlaniGirdi(durum="BELGEDE_YOK")
+    return mcp_araclari.TamlikGirdi(
+        beklenen_satir_sayisi=(
+            mcp_araclari.TamlikAlaniGirdi(durum="DEGER", deger=satir)
+            if satir is not None
+            else mcp_araclari.TamlikAlaniGirdi(durum="OKUNAMADI")
+        ),
+        acilis_bakiyesi_kurus=yok,
+        kapanis_bakiyesi_kurus=yok,
+        toplam_giris_kurus=yok,
+        toplam_cikis_kurus=yok,
+    )
+
+
 def _belge_isle(
     baglam: mcp_araclari.AracBaglami,
     ad: str,
@@ -127,7 +143,7 @@ def _belge_isle(
         mcp_araclari.OkumaBaslatGirdisi(
             belge_id=alinan.belge_id,
             islem_anahtari=f"ob-{anahtar}",
-            tamlik=mcp_araclari.TamlikGirdi(beklenen_satir_sayisi=len(hareketler_)),
+            tamlik=_tamlik_girdi(len(hareketler_)),
         ),
     )
     paket = _arac(

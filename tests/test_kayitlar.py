@@ -5,6 +5,7 @@ kaynak bağı, tek işlem) → okuma_tamamla → KAYITLI.
 """
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -103,8 +104,32 @@ def _okuma_ac(
             belge_dizini=arsiv,
             islem_anahtari=ob_anahtari,
             aktor=COWORK,
+            tamlik=_tamlik(satir=0),
             simdi=SIMDI,
         )
+
+
+def _tamlik(
+    satir: int | None = 0,
+    acilis: int | None = None,
+    kapanis: int | None = None,
+    giris: int | None = None,
+    cikis: int | None = None,
+) -> bl.Tamlik:
+    """Test tamlığı: sayı DEGER, verilmeyen BELGEDE_YOK, satır None OKUNAMADI."""
+
+    def alan(v: int | None) -> bl.TamlikAlani:
+        return bl.TamlikAlani.sayi(v) if v is not None else bl.BELGEDE_YOK
+
+    return bl.Tamlik(
+        beklenen_satir_sayisi=(
+            bl.TamlikAlani.sayi(satir) if satir is not None else bl.OKUNAMADI
+        ),
+        acilis_bakiyesi_kurus=alan(acilis),
+        kapanis_bakiyesi_kurus=alan(kapanis),
+        toplam_giris_kurus=alan(giris),
+        toplam_cikis_kurus=alan(cikis),
+    )
 
 
 def _satir(n: int, **ham: object) -> bl.SatirGirdisi:
@@ -374,7 +399,7 @@ def test_ucta_uca_hareketli_belge_kayitli_olur(
             okuma_id=okuma.id,
             islem_anahtari="ot-1",
             aktor=COWORK,
-            tamlik=bl.Tamlik(beklenen_satir_sayisi=2),
+            tamlik=_tamlik(satir=2),
             simdi=SIMDI,
         )
     assert sonuc.belge.durum is sz.BelgeDurumu.KAYITLI
@@ -414,13 +439,7 @@ def test_toplamlar_tutuyorsa_belge_kayitli_olur(
     _tamamla(
         db,
         iki_hareket.id,
-        bl.Tamlik(
-            beklenen_satir_sayisi=2,
-            acilis_bakiyesi_kurus=-1_000,
-            kapanis_bakiyesi_kurus=6_500,  # −1.000 + 10.000 − 2.500
-            toplam_giris_kurus=10_000,
-            toplam_cikis_kurus=2_500,
-        ),
+        _tamlik(satir=2, acilis=-1_000, kapanis=6_500, giris=10_000, cikis=2_500),
         "ot-1",
     )
     assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.KAYITLI
@@ -429,12 +448,9 @@ def test_toplamlar_tutuyorsa_belge_kayitli_olur(
 @pytest.mark.parametrize(
     ("tamlik", "alan"),
     [
-        (bl.Tamlik(toplam_giris_kurus=10_001), "toplam_giris_kurus"),
-        (bl.Tamlik(toplam_cikis_kurus=2_600), "toplam_cikis_kurus"),  # Cowork'un hatası
-        (
-            bl.Tamlik(acilis_bakiyesi_kurus=68, kapanis_bakiyesi_kurus=-2_567),
-            "kapanis_bakiyesi_kurus",
-        ),
+        (_tamlik(satir=2, giris=10_001), "toplam_giris_kurus"),
+        (_tamlik(satir=2, cikis=2_600), "toplam_cikis_kurus"),  # Cowork'un hatası
+        (_tamlik(satir=2, acilis=68, kapanis=-2_567), "kapanis_bakiyesi_kurus"),
     ],
 )
 def test_toplam_tutmuyorsa_mutabakat_farki_ve_belge_kayitli_olmaz(
@@ -449,14 +465,24 @@ def test_toplam_tutmuyorsa_mutabakat_farki_ve_belge_kayitli_olmaz(
         assert bl.okuma_getir(oturum, iki_hareket.id).durum is sz.OkumaDurumu.ACIK
 
 
-def test_verilmeyen_toplam_denetlenmez_ve_kapanis_yalniz_acilisla(
+def test_okunamadi_toplam_belgeyi_kayitli_yapmaz(
     db: vt.Veritabani, iki_hareket: bl.Okuma
 ) -> None:
-    """Yalnız kapanış verilmişse açılış bilinmiyor; eşitlik denetimi yapılmaz."""
+    tamlik = replace(_tamlik(satir=2, giris=10_000), toplam_cikis_kurus=bl.OKUNAMADI)
+    with pytest.raises(sz.BelgeHazirDegil) as hata:
+        _tamamla(db, iki_hareket.id, tamlik, "ot-1")
+    assert hata.value.alan == "toplam_cikis_kurus"
+    assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.OKUNUYOR
+
+
+def test_belgede_yok_toplam_denetlenmez_ve_kapanis_yalniz_acilisla(
+    db: vt.Veritabani, iki_hareket: bl.Okuma
+) -> None:
+    """Toplamlar BELGEDE_YOK; yalnız kapanış verilmişse eşitlik denetimi yapılmaz."""
     _tamamla(
         db,
         iki_hareket.id,
-        bl.Tamlik(beklenen_satir_sayisi=2, kapanis_bakiyesi_kurus=99),
+        _tamlik(satir=2, kapanis=99),
         "ot-1",
     )
     assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.KAYITLI
@@ -465,7 +491,7 @@ def test_verilmeyen_toplam_denetlenmez_ve_kapanis_yalniz_acilisla(
 def test_eksik_satir_cozulunce_ayni_toplamlarla_kayitli_olur(
     db: vt.Veritabani, iki_hareket: bl.Okuma, hesap: int
 ) -> None:
-    tamlik = bl.Tamlik(toplam_giris_kurus=10_000, toplam_cikis_kurus=2_650)
+    tamlik = _tamlik(satir=3, giris=10_000, cikis=2_650)
     with pytest.raises(sz.MutabakatFarki):
         _tamamla(db, iki_hareket.id, tamlik, "ot-1")
 

@@ -27,6 +27,19 @@ SIMDI = datetime(2026, 9, 17, 12, 0)
 COWORK = sz.DenetimAktoru.COWORK
 
 
+def _tamlik(satir: int | None) -> bl.Tamlik:
+    """Satır sayısı DEGER (None → OKUNAMADI), diğer alanlar BELGEDE_YOK."""
+    return bl.Tamlik(
+        beklenen_satir_sayisi=(
+            bl.TamlikAlani.sayi(satir) if satir is not None else bl.OKUNAMADI
+        ),
+        acilis_bakiyesi_kurus=bl.BELGEDE_YOK,
+        kapanis_bakiyesi_kurus=bl.BELGEDE_YOK,
+        toplam_giris_kurus=bl.BELGEDE_YOK,
+        toplam_cikis_kurus=bl.BELGEDE_YOK,
+    )
+
+
 class Ortam:
     """Bir veritabanı, bir AKTIF hesap, sırayla açılan belgeler."""
 
@@ -88,6 +101,7 @@ class Ortam:
                 belge_dizini=self.arsiv,
                 islem_anahtari=self._anahtar("ob"),
                 aktor=COWORK,
+                tamlik=_tamlik(None),  # sayılamadı; kaydet gerçek sayıyı verir
                 simdi=SIMDI,
             )
 
@@ -117,12 +131,15 @@ class Ortam:
             )
 
     def kaydet(self, okuma: bl.Okuma) -> bl.Belge:
+        with self.db.okuma_islemi() as oturum:
+            satir_sayisi = len(bl.satirlari_listele(oturum, okuma.id))
         with self.db.yazma_islemi() as oturum:
             return bl.okuma_tamamla(
                 oturum,
                 okuma_id=okuma.id,
                 islem_anahtari=self._anahtar("ot"),
                 aktor=COWORK,
+                tamlik=_tamlik(satir_sayisi),
                 simdi=SIMDI,
             ).belge
 

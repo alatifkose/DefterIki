@@ -113,6 +113,20 @@ class OkumaDurumu(StrEnum):
     IPTAL = "IPTAL"
 
 
+class TamlikDurumu(StrEnum):
+    """Tamlık alanının durumu (karar 2026-09-17): her alan her okumada bildirilir.
+
+    ``DEGER`` sayı zorunlu; ``BELGEDE_YOK`` bilgi belgede gerçekten yok, ilgili
+    denetim atlanır ve bu kayda geçer; ``OKUNAMADI`` bilgi belgede var ama
+    güvenle çıkarılamadı, belge kayıtlı olamaz. Alanın hiç gönderilmemesi
+    geçersiz istektir; "unutuldu" ile "belgede yok" aynı şey değildir.
+    """
+
+    DEGER = "DEGER"
+    BELGEDE_YOK = "BELGEDE_YOK"
+    OKUNAMADI = "OKUNAMADI"
+
+
 class KaynakRolu(StrEnum):
     """Bir kaydı destekleyen satırın rolü (C11: iki kaynaklıda yalnız destek kalkar)."""
 

@@ -107,12 +107,24 @@ def _okuma_baslat(
             belge_id=belge_id,
             islem_anahtari="ob-1",
             icerik={"donem": "2026-08"},
-            tamlik=(
-                mcp_araclari.TamlikGirdi(beklenen_satir_sayisi=beklenen)
-                if beklenen is not None
-                else None
-            ),
+            tamlik=_tamlik_girdi(beklenen),
         ),
+    )
+
+
+def _tamlik_girdi(satir: int | None) -> mcp_araclari.TamlikGirdi:
+    """Satır sayısı DEGER (None → OKUNAMADI), diğer dört alan BELGEDE_YOK."""
+    yok = mcp_araclari.TamlikAlaniGirdi(durum="BELGEDE_YOK")
+    return mcp_araclari.TamlikGirdi(
+        beklenen_satir_sayisi=(
+            mcp_araclari.TamlikAlaniGirdi(durum="DEGER", deger=satir)
+            if satir is not None
+            else mcp_araclari.TamlikAlaniGirdi(durum="OKUNAMADI")
+        ),
+        acilis_bakiyesi_kurus=yok,
+        kapanis_bakiyesi_kurus=yok,
+        toplam_giris_kurus=yok,
+        toplam_cikis_kurus=yok,
     )
 
 
@@ -184,7 +196,14 @@ def test_ekstre_araclarla_ucta_uca(
     assert okuma.okuma_id == 1 and okuma.belge_id == 1 and okuma.hedef_surumu == 2
     assert okuma.icerik is not None
     assert okuma.icerik["okuma"]["talimat_surumu"] == zarf.TALIMAT_SURUMU
-    assert okuma.icerik["okuma"]["tamlik"]["beklenen_satir_sayisi"] == 3
+    assert okuma.icerik["okuma"]["tamlik"]["beklenen_satir_sayisi"] == {
+        "durum": "DEGER",
+        "deger": 3,
+    }
+    assert okuma.icerik["okuma"]["tamlik"]["toplam_giris_kurus"] == {
+        "durum": "BELGEDE_YOK",
+        "deger": None,
+    }
     assert okuma.icerik["belge"]["durum"] == "OKUNUYOR"
 
     paket = _hareket_yaz(
@@ -251,7 +270,7 @@ def test_ekstre_araclarla_ucta_uca(
 @pytest.fixture
 def acik_okuma(baglam: mcp_araclari.AracBaglami, hesap: int) -> int:
     _belge_al(baglam)
-    sonuc = _okuma_baslat(baglam, 1)
+    sonuc = _okuma_baslat(baglam, 1, beklenen=1)
     assert sonuc.okuma_id is not None
     return sonuc.okuma_id
 
@@ -431,7 +450,13 @@ def test_sunucu_uzerinden_belge_araclari(
             "girdi": {
                 "belge_id": 1,
                 "islem_anahtari": "ob",
-                "tamlik": {"beklenen_satir_sayisi": 1},
+                "tamlik": {
+                    "beklenen_satir_sayisi": {"durum": "DEGER", "deger": 1},
+                    "acilis_bakiyesi_kurus": {"durum": "BELGEDE_YOK"},
+                    "kapanis_bakiyesi_kurus": {"durum": "BELGEDE_YOK"},
+                    "toplam_giris_kurus": {"durum": "BELGEDE_YOK"},
+                    "toplam_cikis_kurus": {"durum": "BELGEDE_YOK"},
+                },
             }
         },
     )
@@ -469,3 +494,79 @@ def test_sunucu_uzerinden_belge_araclari(
     with baglam.veritabani.okuma_islemi() as oturum:
         assert nesneler.aktif_nesneyi_getir(oturum, hesap).id == hesap
         assert hs.etkin_bakiye(oturum, nesne_id=hesap).bakiye_kurus == 500
+
+
+# --- tamlık üç durum (karar 2026-09-17) ---------------------------------------------
+
+
+def test_okunamadi_tamlik_araclarla_belgeyi_kayitli_yapmaz_sonra_degerle_kayitli(
+    baglam: mcp_araclari.AracBaglami, hesap: int
+) -> None:
+    _belge_al(baglam)
+    okuma = _okuma_baslat(baglam, 1, beklenen=None)  # satır sayısı OKUNAMADI
+    assert okuma.icerik is not None
+    assert okuma.icerik["okuma"]["tamlik"]["beklenen_satir_sayisi"] == {
+        "durum": "OKUNAMADI",
+        "deger": None,
+    }
+    _hareket_yaz(baglam, 1, [_hareket(0, hesap)])
+
+    ret = _tamamla(baglam, 1)
+    assert ret.durum is zarf.YanitDurumu.REDDEDILDI
+    assert ret.hata is not None
+    assert (ret.hata.kod, ret.hata.alan) == (
+        "BELGE_HAZIR_DEGIL",
+        "beklenen_satir_sayisi",
+    )
+    assert ret.belge_kaydi is not zarf.BelgeKaydiDurumu.KAYITLI
+
+    tamam = _calistir(
+        baglam,
+        mcp_kapisi.ARAC_OKUMA_TAMAMLA,
+        mcp_araclari.okuma_tamamla,
+        mcp_araclari.OkumaTamamlaGirdisi(
+            okuma_id=1, islem_anahtari="ot-2", tamlik=_tamlik_girdi(1)
+        ),
+    )
+    assert tamam.belge_kaydi is zarf.BelgeKaydiDurumu.KAYITLI
+
+
+def test_sunucu_uzerinden_eksik_tamlik_alani_sema_reddi_deger_sizdirmaz(
+    baglam: mcp_araclari.AracBaglami,
+) -> None:
+    sunucu = mcp_kapisi.sunucu_kur(baglam.ayarlar, "0001", baglam.veritabani)
+    sema_ = {a.name: a.input_schema for a in anyio.run(sunucu.list_tools)}
+    tamlik_semasi = sema_[mcp_kapisi.ARAC_OKUMA_BASLAT]["$defs"]["TamlikGirdi"]
+    assert set(tamlik_semasi["required"]) == {
+        alan for alan, _ in belgeler.TAMLIK_ALANLARI
+    }
+    assert (
+        "tamlik"
+        in sema_[mcp_kapisi.ARAC_OKUMA_BASLAT]["$defs"]["OkumaBaslatGirdisi"][
+            "required"
+        ]
+    )
+
+    sonuc = anyio.run(
+        sunucu.call_tool,
+        mcp_kapisi.ARAC_OKUMA_BASLAT,
+        {
+            "girdi": {
+                "belge_id": 1,
+                "islem_anahtari": "ob",
+                "tamlik": {
+                    "beklenen_satir_sayisi": {"durum": "DEGER", "deger": 6},
+                    "acilis_bakiyesi_kurus": {"durum": "DEGER", "deger": 424242},
+                    "kapanis_bakiyesi_kurus": {"durum": "BELGEDE_YOK"},
+                    "toplam_giris_kurus": {"durum": "BELGEDE_YOK"},
+                    # toplam_cikis_kurus hiç gönderilmedi
+                },
+            }
+        },
+    )
+    assert isinstance(sonuc, CallToolResult) and sonuc.structured_content is not None
+    z = sonuc.structured_content
+    assert z["durum"] == "REDDEDILDI" and z["hata"]["kod"] == "GIRDI_GECERSIZ"
+    assert "toplam_cikis_kurus" in z["hata"]["mesaj"]
+    assert "424242" not in z["hata"]["mesaj"]
+    assert _sayi(baglam, sema.okuma) == 0

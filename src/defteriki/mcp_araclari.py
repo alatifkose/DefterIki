@@ -316,16 +316,38 @@ class BelgeGetirGirdisi(BaseModel):
     belge_id: int = Field(strict=True, gt=0)
 
 
-class TamlikGirdi(BaseModel):
-    """Belge hakkında bildirilen tamlık; verilmeyen alan bilinmiyor demektir."""
+class TamlikAlaniGirdi(BaseModel):
+    """Bir tamlık alanı: DEGER (sayı zorunlu) / BELGEDE_YOK / OKUNAMADI."""
 
     model_config = ConfigDict(frozen=True)
 
-    beklenen_satir_sayisi: int | None = Field(default=None, strict=True)
-    acilis_bakiyesi_kurus: int | None = Field(default=None, strict=True)
-    kapanis_bakiyesi_kurus: int | None = Field(default=None, strict=True)
-    toplam_giris_kurus: int | None = Field(default=None, strict=True)
-    toplam_cikis_kurus: int | None = Field(default=None, strict=True)
+    durum: Literal["DEGER", "BELGEDE_YOK", "OKUNAMADI"] = Field(
+        description=(
+            "DEGER: sayı belgeden alındı. BELGEDE_YOK: bilgi belgede gerçekten yok "
+            "(denetim atlanır, kayda geçer). OKUNAMADI: bilgi belgede var ama "
+            "güvenle çıkarılamadı (belge kayıtlı olamaz)."
+        )
+    )
+    deger: Any = Field(
+        default=None,
+        description="DEGER ise tam sayı (kuruş ya da adet); diğer durumlarda verilmez.",
+    )
+
+
+class TamlikGirdi(BaseModel):
+    """Beş alanın her biri zorunlu; alanın hiç gönderilmemesi geçersiz istektir.
+
+    Satır sayısı için BELGEDE_YOK yasak: gördüğün hareketleri say, sayamıyorsan
+    OKUNAMADI. Toplamları ve bakiyeleri belgeden aynen al, kendin toplama.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    beklenen_satir_sayisi: TamlikAlaniGirdi
+    acilis_bakiyesi_kurus: TamlikAlaniGirdi
+    kapanis_bakiyesi_kurus: TamlikAlaniGirdi
+    toplam_giris_kurus: TamlikAlaniGirdi
+    toplam_cikis_kurus: TamlikAlaniGirdi
 
 
 class OkumaBaslatGirdisi(BaseModel):
@@ -340,7 +362,9 @@ class OkumaBaslatGirdisi(BaseModel):
     icerik: dict[str, Any] | None = Field(
         default=None, description="Belge düzeyi bilgi (dönem, hesap ...)."
     )
-    tamlik: TamlikGirdi | None = None
+    tamlik: TamlikGirdi = Field(
+        description="Zorunlu: beş alanın her biri DEGER / BELGEDE_YOK / OKUNAMADI."
+    )
 
 
 class SatirGirdi(BaseModel):
@@ -394,7 +418,13 @@ class OkumaTamamlaGirdisi(BaseModel):
 
     okuma_id: int = Field(strict=True, gt=0)
     islem_anahtari: str | None = None
-    tamlik: TamlikGirdi | None = None
+    tamlik: TamlikGirdi | None = Field(
+        default=None,
+        description=(
+            "İsteğe bağlı; verilirse beş alanın tamamı yeniden verilir ve "
+            "okumadakinin yerine geçer."
+        ),
+    )
 
 
 class BelgeKaydetGirdisi(BaseModel):
@@ -911,17 +941,13 @@ def _okuma_ozeti(okuma: belgeler.Okuma) -> dict[str, Any]:
         "surum_no": okuma.surum_no,
         "durum": okuma.durum.value,
         "talimat_surumu": okuma.sema_surumu,
-        "tamlik": (
-            {
-                "beklenen_satir_sayisi": okuma.tamlik.beklenen_satir_sayisi,
-                "acilis_bakiyesi_kurus": okuma.tamlik.acilis_bakiyesi_kurus,
-                "kapanis_bakiyesi_kurus": okuma.tamlik.kapanis_bakiyesi_kurus,
-                "toplam_giris_kurus": okuma.tamlik.toplam_giris_kurus,
-                "toplam_cikis_kurus": okuma.tamlik.toplam_cikis_kurus,
+        "tamlik": {
+            alan: {
+                "durum": getattr(okuma.tamlik, alan).durum.value,
+                "deger": getattr(okuma.tamlik, alan).deger,
             }
-            if okuma.tamlik
-            else None
-        ),
+            for alan, _ in belgeler.TAMLIK_ALANLARI
+        },
     }
 
 
@@ -929,11 +955,12 @@ def _tamlik(girdi: TamlikGirdi | None) -> belgeler.Tamlik | None:
     if girdi is None:
         return None
     return belgeler.Tamlik(
-        beklenen_satir_sayisi=girdi.beklenen_satir_sayisi,
-        acilis_bakiyesi_kurus=girdi.acilis_bakiyesi_kurus,
-        kapanis_bakiyesi_kurus=girdi.kapanis_bakiyesi_kurus,
-        toplam_giris_kurus=girdi.toplam_giris_kurus,
-        toplam_cikis_kurus=girdi.toplam_cikis_kurus,
+        **{
+            alan: belgeler.TamlikAlani(
+                sz.TamlikDurumu(getattr(girdi, alan).durum), getattr(girdi, alan).deger
+            )
+            for alan, _ in belgeler.TAMLIK_ALANLARI
+        }
     )
 
 

@@ -119,19 +119,47 @@ class Belge:
 
 
 @dataclass(frozen=True, slots=True)
+class TamlikAlani:
+    """Bir tamlık alanı: durum ve (yalnız ``DEGER`` ise) sayı."""
+
+    durum: sz.TamlikDurumu
+    deger: int | None = None
+
+    @staticmethod
+    def sayi(deger: int) -> TamlikAlani:
+        return TamlikAlani(sz.TamlikDurumu.DEGER, deger)
+
+
+BELGEDE_YOK = TamlikAlani(sz.TamlikDurumu.BELGEDE_YOK)
+OKUNAMADI = TamlikAlani(sz.TamlikDurumu.OKUNAMADI)
+
+
+@dataclass(frozen=True, slots=True)
 class Tamlik:
     """Cowork'un belge hakkında bildirdiği tamlık bilgisi (Tam Plan 5.2).
 
-    Verilmeyen alan "bilinmiyor" demektir; "belgenin tamamı okundu" iddiası
-    üretilmez. Bakiye alanları negatif olabilir (KMH); toplamlar ve satır
-    sayısı sıfır ya da pozitif.
+    Karar 2026-09-17: beş alanın her biri her okumada zorunlu bildirilir
+    (``DEGER`` / ``BELGEDE_YOK`` / ``OKUNAMADI``); alanın hiç gönderilmemesi
+    ``GIRDI_GECERSIZ``. Satır sayısı için ``BELGEDE_YOK`` yasaktır: Cowork
+    gördüğü hareketleri sayar, sayamıyorsa ``OKUNAMADI`` der. Bakiye alanları
+    negatif olabilir (KMH); toplamlar ve satır sayısı sıfır ya da pozitif.
     """
 
-    beklenen_satir_sayisi: int | None = None
-    acilis_bakiyesi_kurus: int | None = None
-    kapanis_bakiyesi_kurus: int | None = None
-    toplam_giris_kurus: int | None = None
-    toplam_cikis_kurus: int | None = None
+    beklenen_satir_sayisi: TamlikAlani
+    acilis_bakiyesi_kurus: TamlikAlani
+    kapanis_bakiyesi_kurus: TamlikAlani
+    toplam_giris_kurus: TamlikAlani
+    toplam_cikis_kurus: TamlikAlani
+
+
+TAMLIK_ALANLARI: tuple[tuple[str, bool], ...] = (
+    ("beklenen_satir_sayisi", False),
+    ("acilis_bakiyesi_kurus", True),
+    ("kapanis_bakiyesi_kurus", True),
+    ("toplam_giris_kurus", False),
+    ("toplam_cikis_kurus", False),
+)
+"""Tamlık alanları ve negatif olabilir mi."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +169,7 @@ class Okuma:
     surum_no: int
     sema_surumu: str
     icerik: dict[str, Any] | None
-    tamlik: Tamlik | None
+    tamlik: Tamlik
     durum: sz.OkumaDurumu
     olusturma_zamani: datetime
 
@@ -412,11 +440,18 @@ def okuma_baslat(
     Arşiv dosyası diskte yerinde değilse ``ARSIV_EKSIK`` (S10): dosyasız
     belgeye okuma başlamaz. ``sema_surumu`` Cowork'un uyduğu okuma
     sözleşmesinin sürümüdür (Aşama 5'te ``docs/cowork.md`` ile sabitlenir);
-    burada yalnız boş olmayan kısa metin olarak saklanır.
+    burada yalnız boş olmayan kısa metin olarak saklanır. ``tamlik`` zorunlu
+    (karar 2026-09-17); eksikse ``GIRDI_GECERSIZ`` ve okuma açılmaz.
     """
     simdi = simdi or sz.simdi_utc()
     sema_surumu = _sema_surumunu_dogrula(sema_surumu)
     icerik_json = _icerigi_dogrula(icerik)
+    if tamlik is None:
+        raise sz.GirdiGecersiz(
+            "tamlık zorunlu: beş alanın her biri DEGER, BELGEDE_YOK ya da "
+            "OKUNAMADI olarak bildirilmeli",
+            alan="tamlik",
+        )
     tamlik_json = _tamligi_dogrula(tamlik)
     istek = {
         "belge_id": belge_id,
@@ -578,13 +613,14 @@ def okuma_tamamla(
     """Cowork'un "bitti" bildirimi: okuma ``TAMAMLANDI``, belge ``HAZIR`` ve
     ardından uygulama belge kaydını tanımlar, belge ``KAYITLI`` (C07).
 
-    Koşullar sağlanmazsa (satır sonuçlanmamış → ``BELGE_HAZIR_DEGIL``, satır
-    sayısı beklenenden farklı → ``MUTABAKAT_FARKI``) hata verilir ve hiçbir
-    durum değişmez: okuma ``ACIK`` kalır, eksik satırlar gönderilebilir.
-    ``tamlik`` verilirse okumadakinin yerine geçer.
+    Koşullar sağlanmazsa (satır sonuçlanmamış ya da tamlık alanı OKUNAMADI →
+    ``BELGE_HAZIR_DEGIL``, satır sayısı ya da toplamlar tutmuyor →
+    ``MUTABAKAT_FARKI``) hata verilir ve hiçbir durum değişmez: okuma ``ACIK``
+    kalır, eksik satırlar gönderilebilir. ``tamlik`` isteğe bağlıdır;
+    verilirse beş alanın tamamı yeniden verilir ve okumadakinin yerine geçer.
     """
     simdi = simdi or sz.simdi_utc()
-    tamlik_json = _tamligi_dogrula(tamlik)
+    tamlik_json = _tamligi_dogrula(tamlik) if tamlik is not None else None
     istek = {"okuma_id": okuma_id, "tamlik": tamlik_json}
 
     def tamamla(islem_id: int) -> islem_anahtarlari.Sonuc:
@@ -702,7 +738,10 @@ def _belge_kaydini_tanimla(
     okuma = okuma_getir(oturum, okuma_id)
     if okuma.durum is not sz.OkumaDurumu.TAMAMLANDI:
         raise sz.BelgeHazirDegil("okuma tamamlanmamış", alan="okuma_id")
-    _kayit_kosullarini_denetle(oturum, okuma_id, okuma.tamlik)
+    atlanan = _kayit_kosullarini_denetle(oturum, okuma_id, okuma.tamlik)
+    gerekce = f"etkin okuma {okuma_id}"
+    if atlanan:
+        gerekce += "; atlanan denetimler: " + "; ".join(atlanan)
     return _belge_durumunu_degistir(
         oturum,
         belge,
@@ -711,15 +750,20 @@ def _belge_kaydini_tanimla(
         aktor=sz.DenetimAktoru.UYGULAMA,
         simdi=simdi,
         islem_id=islem_id,
-        gerekce=f"etkin okuma {okuma_id}",
+        gerekce=gerekce,
         etkin_okuma_id=okuma_id,
     )
 
 
 def _kayit_kosullarini_denetle(
-    oturum: Session, okuma_id: int, tamlik: Tamlik | None
-) -> None:
-    """Bütün satırlar sonuçlanmış ve satır sayısı beklenenle aynı (C07, 4.5 hâli)."""
+    oturum: Session, okuma_id: int, tamlik: Tamlik
+) -> list[str]:
+    """C07 koşulları; döndürdüğü liste BELGEDE_YOK yüzünden atlanan denetimlerdir.
+
+    Sıra: her satır sonuçlanmış; hiçbir tamlık alanı ``OKUNAMADI`` değil
+    (belge kayıtlı olamaz); satır sayısı ``DEGER`` ise yazılanla aynı; sonra
+    toplamlar (``_toplamlari_denetle``).
+    """
     sayimlar = oturum.execute(
         select(sema.okuma_satir.c.durum, func.count())
         .where(sema.okuma_satir.c.okuma_id == okuma_id)
@@ -734,24 +778,30 @@ def _kayit_kosullarini_denetle(
                 "kaydedilmez",
                 alan="okuma_id",
             )
-    if tamlik is None:
-        return
-    if tamlik.beklenen_satir_sayisi is not None:
-        if tamlik.beklenen_satir_sayisi != toplam:
-            raise sz.MutabakatFarki(
-                f"beklenen satır sayısı {tamlik.beklenen_satir_sayisi}, yazılan "
-                f"{toplam}; eksik ya da fazla satırı çöz",
-                alan="beklenen_satir_sayisi",
+    for alan, _ in TAMLIK_ALANLARI:
+        if getattr(tamlik, alan).durum is sz.TamlikDurumu.OKUNAMADI:
+            raise sz.BelgeHazirDegil(
+                f"{alan} belgede var ama güvenle okunamadı; belgeyi yeniden oku "
+                "ve tamlığı yeniden bildir",
+                alan=alan,
             )
-    _toplamlari_denetle(oturum, okuma_id, tamlik)
+    satir_sayisi = tamlik.beklenen_satir_sayisi
+    if satir_sayisi.durum is sz.TamlikDurumu.DEGER and satir_sayisi.deger != toplam:
+        raise sz.MutabakatFarki(
+            f"beklenen satır sayısı {satir_sayisi.deger}, yazılan {toplam}; eksik "
+            "ya da fazla satırı çöz",
+            alan="beklenen_satir_sayisi",
+        )
+    return _toplamlari_denetle(oturum, okuma_id, tamlik)
 
 
-def _toplamlari_denetle(oturum: Session, okuma_id: int, tamlik: Tamlik) -> None:
+def _toplamlari_denetle(oturum: Session, okuma_id: int, tamlik: Tamlik) -> list[str]:
     """Tamlıkta verilen toplamlar yazılan satırlarla tutmalı (karar 2026-09-17).
 
-    Üç denetim, her biri yalnız ilgili alanlar verilmişse: toplam giriş =
-    yazılan ARTTIR toplamı; toplam çıkış = yazılan AZALT toplamı; açılış +
-    giriş − çıkış = kapanış (giriş/çıkış yazılan satırlardan). Belgenin
+    Üç denetim: toplam giriş = yazılan ARTTIR toplamı; toplam çıkış = yazılan
+    AZALT toplamı; açılış + giriş − çıkış = kapanış (giriş/çıkış yazılan
+    satırlardan). ``DEGER`` olmayan alanın denetimi atlanır ve döndürülen
+    listeye yazılır (``OKUNAMADI`` buraya gelmez, önce reddedilir). Belgenin
     söylediği yazılır, aritmetiği uygulama denetler; tutmuyorsa
     ``MUTABAKAT_FARKI`` ve belge kayıtlı olmaz.
     """
@@ -778,33 +828,50 @@ def _toplamlari_denetle(oturum: Session, okuma_id: int, tamlik: Tamlik) -> None:
         .where(k.c.durum == sz.KayitDurumu.AKTIF.value, bu_okumadan)
     ).one()
     giris, cikis = int(satir[0]), int(satir[1])
+    atlanan: list[str] = []
+    deger = sz.TamlikDurumu.DEGER
 
-    if tamlik.toplam_giris_kurus is not None and tamlik.toplam_giris_kurus != giris:
-        raise sz.MutabakatFarki(
-            f"verilen toplam giriş {tamlik.toplam_giris_kurus} kuruş, yazılan "
-            f"satırların girişi {giris}; toplamı belgeden aynen al ya da eksik "
-            "satırı çöz",
-            alan="toplam_giris_kurus",
-        )
-    if tamlik.toplam_cikis_kurus is not None and tamlik.toplam_cikis_kurus != cikis:
-        raise sz.MutabakatFarki(
-            f"verilen toplam çıkış {tamlik.toplam_cikis_kurus} kuruş, yazılan "
-            f"satırların çıkışı {cikis}; toplamı belgeden aynen al ya da eksik "
-            "satırı çöz",
-            alan="toplam_cikis_kurus",
-        )
-    if (
-        tamlik.acilis_bakiyesi_kurus is not None
-        and tamlik.kapanis_bakiyesi_kurus is not None
-    ):
-        beklenen_kapanis = tamlik.acilis_bakiyesi_kurus + giris - cikis
-        if beklenen_kapanis != tamlik.kapanis_bakiyesi_kurus:
+    t_giris, t_cikis = tamlik.toplam_giris_kurus, tamlik.toplam_cikis_kurus
+    if t_giris.durum is deger:
+        if t_giris.deger != giris:
             raise sz.MutabakatFarki(
-                f"açılış {tamlik.acilis_bakiyesi_kurus} + giriş {giris} − çıkış "
-                f"{cikis} = {beklenen_kapanis} kuruş, verilen kapanış "
-                f"{tamlik.kapanis_bakiyesi_kurus}; eksik ya da fazla satırı çöz",
+                f"verilen toplam giriş {t_giris.deger} kuruş, yazılan satırların "
+                f"girişi {giris}; toplamı belgeden aynen al ya da eksik satırı çöz",
+                alan="toplam_giris_kurus",
+            )
+    else:
+        atlanan.append(f"toplam_giris_kurus {t_giris.durum.value}")
+    if t_cikis.durum is deger:
+        if t_cikis.deger != cikis:
+            raise sz.MutabakatFarki(
+                f"verilen toplam çıkış {t_cikis.deger} kuruş, yazılan satırların "
+                f"çıkışı {cikis}; toplamı belgeden aynen al ya da eksik satırı çöz",
+                alan="toplam_cikis_kurus",
+            )
+    else:
+        atlanan.append(f"toplam_cikis_kurus {t_cikis.durum.value}")
+
+    acilis, kapanis = tamlik.acilis_bakiyesi_kurus, tamlik.kapanis_bakiyesi_kurus
+    if acilis.durum is deger and kapanis.durum is deger:
+        beklenen_kapanis = (acilis.deger or 0) + giris - cikis
+        if beklenen_kapanis != kapanis.deger:
+            raise sz.MutabakatFarki(
+                f"açılış {acilis.deger} + giriş {giris} − çıkış {cikis} = "
+                f"{beklenen_kapanis} kuruş, verilen kapanış {kapanis.deger}; eksik "
+                "ya da fazla satırı çöz",
                 alan="kapanis_bakiyesi_kurus",
             )
+    else:
+        eksikler = ", ".join(
+            f"{ad} {a.durum.value}"
+            for ad, a in (
+                ("acilis_bakiyesi_kurus", acilis),
+                ("kapanis_bakiyesi_kurus", kapanis),
+            )
+            if a.durum is not deger
+        )
+        atlanan.append(f"kapanış eşitliği ({eksikler})")
+    return atlanan
 
 
 def _belge_durumunu_degistir(
@@ -1039,26 +1106,50 @@ def _icerigi_dogrula(icerik: Mapping[str, Any] | None) -> dict[str, Any] | None:
     return dict(icerik)
 
 
-def _tamligi_dogrula(tamlik: Tamlik | None) -> dict[str, int | None] | None:
-    if tamlik is None:
-        return None
-    for alan, negatif_olabilir in (
-        ("beklenen_satir_sayisi", False),
-        ("acilis_bakiyesi_kurus", True),
-        ("kapanis_bakiyesi_kurus", True),
-        ("toplam_giris_kurus", False),
-        ("toplam_cikis_kurus", False),
-    ):
-        deger = getattr(tamlik, alan)
-        if deger is None:
-            continue
-        if type(deger) is not int or (deger < 0 and not negatif_olabilir):
+def _tamligi_dogrula(tamlik: Tamlik) -> dict[str, dict[str, Any]]:
+    """Beş alanın her biri var, durumu geçerli, değeri durumuyla tutarlı.
+
+    ``DEGER`` → tam sayı (bool değil), negatif yalnız bakiyelerde;
+    ``BELGEDE_YOK`` / ``OKUNAMADI`` → değer verilemez; satır sayısı
+    ``BELGEDE_YOK`` olamaz. JSON'a yazılacak biçimi döndürür.
+    """
+    sonuc: dict[str, dict[str, Any]] = {}
+    for alan, negatif_olabilir in TAMLIK_ALANLARI:
+        a = getattr(tamlik, alan, None)
+        if not isinstance(a, TamlikAlani):
             raise sz.GirdiGecersiz(
-                "tamlık alanı tam sayı olmalı"
-                + ("" if negatif_olabilir else " ve negatif olamaz"),
+                "tamlık alanı eksik; DEGER, BELGEDE_YOK ya da OKUNAMADI bildir",
                 alan=alan,
             )
-    return asdict(tamlik)
+        try:
+            durum = sz.TamlikDurumu(a.durum)
+        except ValueError:
+            raise sz.GirdiGecersiz(
+                "tamlık durumu DEGER, BELGEDE_YOK ya da OKUNAMADI olmalı", alan=alan
+            ) from None
+        if durum is sz.TamlikDurumu.DEGER:
+            deger = a.deger
+            if type(deger) is not int or (deger < 0 and not negatif_olabilir):
+                raise sz.GirdiGecersiz(
+                    "tamlık alanı DEGER ise tam sayı olmalı"
+                    + ("" if negatif_olabilir else " ve negatif olamaz"),
+                    alan=alan,
+                )
+            sonuc[alan] = {"durum": durum.value, "deger": deger}
+            continue
+        if a.deger is not None:
+            raise sz.GirdiGecersiz(
+                f"{durum.value} ile değer verilemez; sayı biliniyorsa DEGER de",
+                alan=alan,
+            )
+        if alan == "beklenen_satir_sayisi" and durum is sz.TamlikDurumu.BELGEDE_YOK:
+            raise sz.GirdiGecersiz(
+                "satır sayısı belgede yok olamaz: gördüğün hareketleri say; "
+                "sayamıyorsan OKUNAMADI bildir",
+                alan=alan,
+            )
+        sonuc[alan] = {"durum": durum.value, "deger": None}
+    return sonuc
 
 
 def _kanonik(deger: Any) -> str:
@@ -1108,14 +1199,20 @@ def _dosya(satir: RowMapping) -> ArsivDosyasi:
 
 
 def _okuma(satir: RowMapping) -> Okuma:
-    tamlik = satir["tamlik"]
+    ham: dict[str, dict[str, Any]] = dict(satir["tamlik"])
+    tamlik = Tamlik(
+        **{
+            alan: TamlikAlani(sz.TamlikDurumu(ham[alan]["durum"]), ham[alan]["deger"])
+            for alan, _ in TAMLIK_ALANLARI
+        }
+    )
     return Okuma(
         id=int(satir["id"]),
         belge_id=int(satir["belge_id"]),
         surum_no=int(satir["surum_no"]),
         sema_surumu=str(satir["sema_surumu"]),
         icerik=dict(satir["icerik"]) if satir["icerik"] is not None else None,
-        tamlik=Tamlik(**tamlik) if tamlik is not None else None,
+        tamlik=tamlik,
         durum=sz.OkumaDurumu(satir["durum"]),
         olusturma_zamani=satir["olusturma_zamani"],
     )

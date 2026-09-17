@@ -1,8 +1,9 @@
 # DEFTERIKI — Cowork Talimatı
 
-**Talimat sürümü: 0.2** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
+**Talimat sürümü: 0.3** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
 bu sürümü okumaya yazar). 0.2: kullanıcı onayı pencereden; tamlık
-toplamları belgeden aynen alınır.
+toplamları belgeden aynen alınır. 0.3: tamlık beş alanıyla zorunlu, her
+alan DEGER / BELGEDE_YOK / OKUNAMADI.
 
 Bu belge, Cowork'un bir banka belgesini DEFTERIKI'ye nasıl işleyeceğini
 anlatır. Cowork belgeyi okur ve MCP araçlarını çağırır. DEFTERIKI kayıtları
@@ -120,13 +121,37 @@ Sıra:
 
 `okuma_baslat(belge_id, islem_anahtari, tamlik={beklenen_satir_sayisi,
 acilis_bakiyesi_kurus, kapanis_bakiyesi_kurus, toplam_giris_kurus,
-toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.2`) yazılır.
+toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.3`) yazılır.
 
-`beklenen_satir_sayisi` belgede saydığın hareket sayısıdır. Bunu ver;
-DEFTERIKI tamamlama anında yazılan satır sayısıyla karşılaştırır. Bakiye ve
-toplam alanlarını belgede yazıyorsa **belgeden aynen** kuruş tam sayı olarak
-al; kendin toplama, hesaplama; belgede yoksa boş bırak; **tahminle
-doldurma.** Zarf `okuma_id` döndürür; belge `OKUNUYOR` olur.
+**Tamlık zorunludur ve beş alanın her biri bildirilir.** Her alan
+`{"durum": ..., "deger": ...}` biçimindedir:
+
+* `DEGER`: sayı belgeden alındı; `deger` kuruş (ya da adet) tam sayı.
+  Toplamları ve bakiyeleri **belgeden aynen** al; kendin toplama, hesaplama.
+* `BELGEDE_YOK`: bu bilgi belgede gerçekten yok; `deger` verilmez. Yalnız
+  gerçekten yoksa kullan; DEFTERIKI o denetimi atlar ve bunu kayda geçirir.
+* `OKUNAMADI`: bilgi belgede var ama güvenle okuyamadın; `deger` verilmez.
+  Belge bu durumda **kayıtlı olamaz**; belgeyi yeniden oku, tamamlarken
+  yeni tamlık ver.
+
+Alanı hiç göndermezsen istek reddedilir. "Unuttum" ile "belgede yok" aynı
+şey değildir. `beklenen_satir_sayisi` için `BELGEDE_YOK` yasaktır: gördüğün
+hareketleri sayarsın; sayamıyorsan `OKUNAMADI`. Örnek:
+
+```json
+"tamlik": {
+  "beklenen_satir_sayisi": {"durum": "DEGER", "deger": 6},
+  "acilis_bakiyesi_kurus": {"durum": "DEGER", "deger": 68},
+  "kapanis_bakiyesi_kurus": {"durum": "DEGER", "deger": -2567},
+  "toplam_giris_kurus": {"durum": "DEGER", "deger": 696924},
+  "toplam_cikis_kurus": {"durum": "BELGEDE_YOK"}
+}
+```
+
+DEFTERIKI tamamlama anında `DEGER` olan alanları yazılan satırlarla
+karşılaştırır: satır sayısı, toplam giriş, toplam çıkış, açılış + giriş −
+çıkış = kapanış. Tutmayan varsa `MUTABAKAT_FARKI`. Zarf `okuma_id`
+döndürür; belge `OKUNUYOR` olur.
 
 ### Adım 6 — Hareketleri yaz: `hareket_yaz`
 
@@ -177,13 +202,17 @@ girmedi; kullanıcıya "kaydettim" deme.
 ### Adım 7 — Bitir: `okuma_tamamla`
 
 Bütün paketler yazıldıktan sonra `okuma_tamamla(okuma_id, islem_anahtari)`.
-`tamlik` verirsen okumadakinin yerine geçer.
+`tamlik` isteğe bağlıdır; verirsen beş alanın tamamını yeniden verirsin ve
+okumadakinin yerine geçer (`OKUNAMADI` alanı yeniden okuyup `DEGER` yapmak
+için).
 
 * `TAMAMLANDI` + `belge_kaydi=KAYITLI` → belge kayıtlı, etkiler hesaba girdi.
 * `MUTABAKAT_FARKI` → yazılan satır sayısı beklenenle tutmuyor. Belgeye dön,
   eksik ya da fazla satırı bul, düzelt, yeni anahtarla yeniden tamamla.
   Hiçbir durum değişmedi; belgeyi kayıtlı gibi raporlama.
-* `BELGE_HAZIR_DEGIL` → sonuçlanmamış satır var. Çöz, yeniden tamamla.
+* `BELGE_HAZIR_DEGIL` → sonuçlanmamış satır var ya da bir tamlık alanı
+  `OKUNAMADI` (hata alanı adını söyler). Çöz ya da belgeyi yeniden okuyup
+  tamlığı `DEGER` ile ver, yeniden tamamla.
 
 `belge_kaydet` yalnız belge `HAZIR` durumunda kalmışsa gerekir (`belge_getir`
 ile gördüğün `hedef_surumu` değerini `gorulen_surum` olarak ver).

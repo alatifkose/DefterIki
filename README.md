@@ -263,8 +263,10 @@ ama kayıtlı değil" her adımda görünür (K19).
   adı), okuma sürümleri; `okuma_id` = etkin okuma.
 * `okuma_baslat(belge_id, islem_anahtari, talimat_surumu, icerik, tamlik)`:
   `talimat_surumu` (varsayılan zarfınki) okumanın `sema_surumu` alanına
-  yazılır; `tamlik` beklenen satır sayısı ve bakiye alanları. `BELGE_YOK`,
-  `ARSIV_EKSIK` (S10) kodlu ret.
+  yazılır; `tamlik` **zorunlu** (karar 2026-09-17): beş alanın her biri
+  `{"durum": DEGER|BELGEDE_YOK|OKUNAMADI, "deger": ...}` (`TamlikGirdi`,
+  `TamlikAlaniGirdi`; şemada beş alan `required`, eksik alan şema reddi ve
+  değer sızmaz). `BELGE_YOK`, `ARSIV_EKSIK` (S10) kodlu ret.
 * `hareket_yaz(okuma_id, islem_anahtari, hareketler[1..500])`: her öğe
   `satir` (satır anahtarı, konum, ham) + `hareket` (HESAP_HAREKETI: nesne,
   yön, kuruş tutar, işlem tarihi, valör, açıklama, para birimi). Paket tek
@@ -276,9 +278,11 @@ ama kayıtlı değil" her adımda görünür (K19).
   `finansal_kurallar`da yapılır: `12.5` `TUTAR_GECERSIZ` kodu ve "yuvarlama
   ya da kur uydurma" yönergesiyle döner (S20).
 * `okuma_tamamla(okuma_id, islem_anahtari, tamlik)`: `belgeler.okuma_tamamla`;
-  koşullar sağlanırsa belge `KAYITLI`, zarf `belge_kaydi=KAYITLI`;
-  `MUTABAKAT_FARKI` / `BELGE_HAZIR_DEGIL` ret, hiçbir durum değişmez,
-  `sonraki_adim` "eksik satırı çöz, yeniden tamamla".
+  `tamlik` isteğe bağlı, verilirse beş alanın tamamı ve okumadakinin yerine
+  geçer; koşullar sağlanırsa belge `KAYITLI`, zarf `belge_kaydi=KAYITLI`;
+  `MUTABAKAT_FARKI` / `BELGE_HAZIR_DEGIL` (sonuçlanmamış satır ya da
+  `OKUNAMADI` alan, alan adıyla) ret, hiçbir durum değişmez, `sonraki_adim`
+  "eksik satırı çöz, yeniden tamamla".
 * `belge_kaydet(belge_id, gorulen_surum, islem_anahtari)`: HAZIR belgeyi
   kaydeder; sürüm uyuşmazsa `HEDEF_SURUMU_DEGISTI`, hazır değilse
   `BELGE_HAZIR_DEGIL`.
@@ -602,6 +606,16 @@ Gözlemler:
   tamlık kaydının düzeltilmesi Aşama 8'in (yeni okuma sürümü /
   geçersizleştirme) konusu. Talimat 0.2'ye "toplamları belgeden aynen al,
   kendin toplama" eklendi.
+  **İkinci karar (aynı gün):** "Cowork o alanı vermemişse denetim yapılmaz"
+  tehlikeliydi: unutulan alan güvenlik kapısını atlatırdı. Tamlık beş
+  alanıyla `okuma_baslat`ta zorunlu; her alan `DEGER` / `BELGEDE_YOK` /
+  `OKUNAMADI`; `okuma_tamamla`da isteğe bağlı ama verilirse beşi birden;
+  satır sayısı `BELGEDE_YOK` olamaz; `OKUNAMADI` belgeyi kayıtlı yapmaz;
+  `BELGEDE_YOK` atlanan denetimi kayda geçirir. Eski biçimdeki geliştirme
+  verisi sıfırlandı, uyumluluk kodu yazılmadı. Talimat 0.3. Ayrıntı
+  "Belge arşivi ve belge akışı" bölümünde; MCP şeması ve testler
+  (`tests/test_mcp_belge_araclari.py`: OKUNAMADI ile tamamlama reddi ve
+  DEGER ile kayıt; sunucu üzerinden eksik alan şema reddi, değer sızmaz).
 * Devreden açılış bakiyesi (0,68 TL) yine bakiyeye girmedi; açık karar
   (Aşama 5 kapısı notu).
 
@@ -888,7 +902,18 @@ yazılmaz (K18, `UNIQUE(belge.dosya_id)`). İşlem anahtarı zorunlu (araç adı
 **Okuma.** `okuma_baslat(belge_id, sema_surumu, belge_dizini, icerik,
 tamlik)` yalnız `ARSIVLENDI` belgede sürüm 1 okumayı `ACIK` açar, belge
 `OKUNUYOR`. Arşiv dosyası diskte yerinde değilse `ARSIV_EKSIK` (S10);
-belge yoksa `BELGE_YOK`. `sema_surumu` Cowork'un uyduğu okuma sözleşmesinin
+belge yoksa `BELGE_YOK`. **Tamlık (karar 2026-09-17, Abdüllatif):**
+zorunlu; beş alanın her biri (`beklenen_satir_sayisi`,
+`acilis_bakiyesi_kurus`, `kapanis_bakiyesi_kurus`, `toplam_giris_kurus`,
+`toplam_cikis_kurus`) bir `TamlikAlani(durum, deger)` — `DEGER` (sayı
+zorunlu, bakiyeler negatif olabilir), `BELGEDE_YOK` (bilgi belgede gerçekten
+yok; değer verilemez; ilgili denetim atlanır ve kayda geçer), `OKUNAMADI`
+(bilgi belgede var ama güvenle çıkarılamadı; değer verilemez; belge kayıtlı
+olamaz). Alanın hiç gönderilmemesi, bilinmeyen durum, durumla çelişen değer
+`GIRDI_GECERSIZ` (alan adıyla). Satır sayısı için `BELGEDE_YOK` yasak:
+Cowork gördüğü hareketleri sayar, sayamıyorsa `OKUNAMADI`. "Unutuldu" ile
+"belgede yok" aynı şey değildir; eski biçim (sayı ya da boş) desteklenmez,
+geliştirme verisi sıfırlandı. JSON: `{"alan": {"durum": ..., "deger": ...}}`. `sema_surumu` Cowork'un uyduğu okuma sözleşmesinin
 sürümüdür; Aşama 5'te `docs/cowork.md` ile sabitlenir, şimdilik boş olmayan
 kısa metin. `Tamlik(beklenen_satir_sayisi, acilis_bakiyesi_kurus,
 kapanis_bakiyesi_kurus, toplam_giris_kurus, toplam_cikis_kurus)` isteğe
@@ -918,12 +943,17 @@ Cowork'un "bitti" bildirimidir: okuma `TAMAMLANDI`, belge `HAZIR`, ardından
 `etkin_okuma_id` bu okuma; ek onay yok. Koşullar: her satır sonuçlanmış
 (`YAZILDI`, `MEVCUDA_BAGLANDI`, `KAPSAM_DISI`; aksi `BELGE_HAZIR_DEGIL`) ve
 tamlıkta beklenen satır sayısı verildiyse yazılan satır sayısıyla aynı (aksi
-`MUTABAKAT_FARKI`), tamlıkta verilen toplam giriş / toplam çıkış yazılan
-satırların ARTTIR / AZALT toplamıyla aynı ve açılış + giriş − çıkış =
-kapanış (karar 2026-09-17, `_toplamlari_denetle`; verilmeyen alan
-denetlenmez; ayrıntı Aşama 6 kapısı notunda). Koşul sağlanmazsa hiçbir
-durum değişmez: okuma `ACIK` kalır, eksik satır gönderilip yeniden
-tamamlanır. Açık şüphe koşulu Aşama 7'de. `belge_kaydet(belge_id, gorulen_surum)` `HAZIR` kalmış belgeyi
+`MUTABAKAT_FARKI`), hiçbir tamlık alanı `OKUNAMADI` değil (aksi
+`BELGE_HAZIR_DEGIL`, alan adıyla), `DEGER` olan toplam giriş / toplam çıkış
+yazılan satırların ARTTIR / AZALT toplamıyla aynı ve açılış + giriş − çıkış
+= kapanış (ikisi de `DEGER` ise; karar 2026-09-17, `_toplamlari_denetle`).
+`BELGEDE_YOK` yüzünden atlanan denetimler belge kaydı denetim olayının
+gerekçesine yazılır ("etkin okuma 1; atlanan denetimler: toplam_giris_kurus
+BELGEDE_YOK; kapanış eşitliği (acilis_bakiyesi_kurus BELGEDE_YOK)").
+Koşul sağlanmazsa hiçbir durum değişmez: okuma `ACIK` kalır, eksik satır
+gönderilip ya da tamlık `DEGER` ile yeniden verilip yeniden tamamlanır.
+Belge türüne göre bazı alanların `BELGEDE_YOK` olamaması Aşama 8'in konusu
+(okuma içeriğine bağlı kural). Açık şüphe koşulu Aşama 7'de. `belge_kaydet(belge_id, gorulen_surum)` `HAZIR` kalmış belgeyi
 (Aşama 7'de karar sonrası) koşulları yeniden denetleyerek `KAYITLI` yapar;
 sürüm uyuşmazsa `HEDEF_SURUMU_DEGISTI`. Belge sürümü her durum
 değişiminde bir artar (ARSIVLENDI 1 → OKUNUYOR 2 → HAZIR 3 → KAYITLI 4).
@@ -946,11 +976,16 @@ sürümler, etkin okuma, satırlar, denetim izi, kaydı uygulama tanımlar); ayn
 dosya iki kez tek belge; aynı anahtar saklı sonuç / farklı dosya çakışma;
 farklı içerik ayrı belge; veritabanı düşerse dosya arşivde belge yok; izinsiz
 yol; S10 (belgesiz okuma, arşiv dosyası silinmiş, olmayan okumaya satır);
-ikinci okuma açılmaz; şema sürümü ve tamlık doğrulama (negatif bakiye
-kabul); S11 on biçim hatası paketin tamamını düşürür; boş ve 501 satırlık
-paket; tekrar gönderim mevcut/çakışma; aynı işlem anahtarı; kapalı okumaya
-satır; mutabakat farkı hiçbir durumu değiştirmez ve eksik satırla tamamlanır;
-tamamlarken tamlık; tamlıksız sıfır satır; yeniden tamamlama; hata her şeyi
+ikinci okuma açılmaz; şema sürümü ve tamlık doğrulama (dokuz geçersiz
+tamlık: negatif/bool/ondalık değer, BELGEDE_YOK ve OKUNAMADI ile değer,
+satır sayısı BELGEDE_YOK, bilinmeyen durum, eksik alan; tamlık zorunlu;
+negatif bakiye kabul ve üç durum JSON'dan kayıpsız döner); S11 on biçim
+hatası paketin tamamını düşürür; boş ve 501 satırlık paket; tekrar gönderim
+mevcut/çakışma; aynı işlem anahtarı; kapalı okumaya satır; mutabakat farkı
+hiçbir durumu değiştirmez ve eksik satırla tamamlanır; tamamlarken tamlık;
+OKUNAMADI belgeyi kayıtlı yapmaz, DEGER ile yeniden tamlık verilince
+kayıtlı; BELGEDE_YOK denetimi atlar ve kayıt olayına yazar; atlanan yoksa
+olay sade; yeniden tamamlama; hata her şeyi
 geri alır; `belge_kaydet` HAZIR → KAYITLI, eski sürüm, hazır olmayan belge;
 sonuçlanmamış satır kaydı engeller; dört ayrı süreç aynı içeriği farklı
 adlarla aynı anda getirir → arşivde tek dosya, tek `arsiv_dosya`, tek belge,

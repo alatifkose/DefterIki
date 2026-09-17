@@ -179,7 +179,13 @@ def test_ucta_uca_nesneden_bakiyeye(
             islem_anahtari="okuma-1",
             aktor=COWORK,
             icerik={"donem": "2026-08", "hesap": "ME"},
-            tamlik=bl.Tamlik(beklenen_satir_sayisi=4, kapanis_bakiyesi_kurus=1_250_00),
+            tamlik=bl.Tamlik(
+                beklenen_satir_sayisi=bl.TamlikAlani.sayi(4),
+                acilis_bakiyesi_kurus=bl.BELGEDE_YOK,
+                kapanis_bakiyesi_kurus=bl.TamlikAlani.sayi(1_250_00),
+                toplam_giris_kurus=bl.TamlikAlani.sayi(2_000_00),
+                toplam_cikis_kurus=bl.TamlikAlani.sayi(750_00),
+            ),
             simdi=SIMDI,
         )
     assert okuma.durum is sz.OkumaDurumu.ACIK
