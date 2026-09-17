@@ -144,6 +144,11 @@ def _yaz(
         )
 
 
+def _belge(db: vt.Veritabani, belge_id: int) -> bl.Belge:
+    with db.okuma_islemi() as oturum:
+        return bl.belge_getir(oturum, belge_id).belge
+
+
 def _sayi(db: vt.Veritabani, tablo: sema.Table) -> int:
     with db.okuma_islemi() as oturum:
         return int(oturum.execute(select(func.count()).select_from(tablo)).scalar_one())
@@ -378,3 +383,94 @@ def test_ucta_uca_hareketli_belge_kayitli_olur(
             ky.kayit_getir(oturum, 99)
         ayrinti = ky.kayit_getir(oturum, 2)
     assert ayrinti.etkiler[0].yon is sz.Yon.AZALT
+
+
+# --- tamlık toplamları (karar 2026-09-17) ---------------------------------------------
+
+
+def _tamamla(db: vt.Veritabani, okuma_id: int, tamlik: bl.Tamlik, anahtar: str) -> None:
+    with db.yazma_islemi() as oturum:
+        bl.okuma_tamamla(
+            oturum,
+            okuma_id=okuma_id,
+            islem_anahtari=anahtar,
+            aktor=COWORK,
+            tamlik=tamlik,
+            simdi=SIMDI,
+        )
+
+
+@pytest.fixture
+def iki_hareket(db: vt.Veritabani, okuma: bl.Okuma, hesap: int) -> bl.Okuma:
+    """10.000 giriş, 2.500 çıkış yazılmış açık okuma."""
+    _yaz(db, okuma.id, _satir(0), _hareket(hesap, 10_000), anahtar="h-1")
+    _yaz(db, okuma.id, _satir(1), _hareket(hesap, 2_500, yon="AZALT"), anahtar="h-2")
+    return okuma
+
+
+def test_toplamlar_tutuyorsa_belge_kayitli_olur(
+    db: vt.Veritabani, iki_hareket: bl.Okuma
+) -> None:
+    _tamamla(
+        db,
+        iki_hareket.id,
+        bl.Tamlik(
+            beklenen_satir_sayisi=2,
+            acilis_bakiyesi_kurus=-1_000,
+            kapanis_bakiyesi_kurus=6_500,  # −1.000 + 10.000 − 2.500
+            toplam_giris_kurus=10_000,
+            toplam_cikis_kurus=2_500,
+        ),
+        "ot-1",
+    )
+    assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.KAYITLI
+
+
+@pytest.mark.parametrize(
+    ("tamlik", "alan"),
+    [
+        (bl.Tamlik(toplam_giris_kurus=10_001), "toplam_giris_kurus"),
+        (bl.Tamlik(toplam_cikis_kurus=2_600), "toplam_cikis_kurus"),  # Cowork'un hatası
+        (
+            bl.Tamlik(acilis_bakiyesi_kurus=68, kapanis_bakiyesi_kurus=-2_567),
+            "kapanis_bakiyesi_kurus",
+        ),
+    ],
+)
+def test_toplam_tutmuyorsa_mutabakat_farki_ve_belge_kayitli_olmaz(
+    db: vt.Veritabani, iki_hareket: bl.Okuma, tamlik: bl.Tamlik, alan: str
+) -> None:
+    with pytest.raises(sz.MutabakatFarki) as hata:
+        _tamamla(db, iki_hareket.id, tamlik, "ot-1")
+
+    assert hata.value.alan == alan
+    assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.OKUNUYOR
+    with db.okuma_islemi() as oturum:
+        assert bl.okuma_getir(oturum, iki_hareket.id).durum is sz.OkumaDurumu.ACIK
+
+
+def test_verilmeyen_toplam_denetlenmez_ve_kapanis_yalniz_acilisla(
+    db: vt.Veritabani, iki_hareket: bl.Okuma
+) -> None:
+    """Yalnız kapanış verilmişse açılış bilinmiyor; eşitlik denetimi yapılmaz."""
+    _tamamla(
+        db,
+        iki_hareket.id,
+        bl.Tamlik(beklenen_satir_sayisi=2, kapanis_bakiyesi_kurus=99),
+        "ot-1",
+    )
+    assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.KAYITLI
+
+
+def test_eksik_satir_cozulunce_ayni_toplamlarla_kayitli_olur(
+    db: vt.Veritabani, iki_hareket: bl.Okuma, hesap: int
+) -> None:
+    tamlik = bl.Tamlik(toplam_giris_kurus=10_000, toplam_cikis_kurus=2_650)
+    with pytest.raises(sz.MutabakatFarki):
+        _tamamla(db, iki_hareket.id, tamlik, "ot-1")
+
+    _yaz(
+        db, iki_hareket.id, _satir(2), _hareket(hesap, 150, yon="AZALT"), anahtar="h-3"
+    )
+    _tamamla(db, iki_hareket.id, tamlik, "ot-2")
+    assert _belge(db, iki_hareket.belge_id).durum is sz.BelgeDurumu.KAYITLI

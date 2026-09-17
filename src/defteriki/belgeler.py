@@ -27,10 +27,10 @@ Satır durumu gönderimle gelir (``YAZILDI`` ya da ``KAPSAM_DISI``). Finansal
 satır için kayıt, etki ve kaynak bağını ``kayitlar.hareket_yaz`` aynı
 gönderimde üretir ve satırı ``YAZILDI`` yazar; ``satir_gonder`` kayıtsız
 satır (başlık, bilgi) içindir. C08 listesinde kabul ile kayıt arasında ara
-durum yoktur. Tamlıktaki bakiye ve toplam alanları
-saklanır; etki toplamlarıyla karşılaştırma 4.6'da ``hesaplamalar`` gelince
-eklenir. Bu teslimde mutabakat = beklenen satır sayısı ile yazılan satır
-sayısı.
+durum yoktur. Tamlıktaki bakiye ve toplam alanları saklanır ve tamamlama
+anında yazılan satırlarla karşılaştırılır (karar 2026-09-17,
+``_toplamlari_denetle``): beklenen satır sayısı, toplam giriş, toplam
+çıkış ve açılış + giriş − çıkış = kapanış; verilmeyen alan denetlenmez.
 
 Her yazma işlevi işlem anahtarı ister (K08), denetim olayı yazar ve commit
 yapmaz; işlem sahibi çağırandır. Tek istisna ``belge_al``: dosya işlemi ile
@@ -47,7 +47,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
@@ -734,12 +734,76 @@ def _kayit_kosullarini_denetle(
                 "kaydedilmez",
                 alan="okuma_id",
             )
-    if tamlik is not None and tamlik.beklenen_satir_sayisi is not None:
+    if tamlik is None:
+        return
+    if tamlik.beklenen_satir_sayisi is not None:
         if tamlik.beklenen_satir_sayisi != toplam:
             raise sz.MutabakatFarki(
                 f"beklenen satır sayısı {tamlik.beklenen_satir_sayisi}, yazılan "
                 f"{toplam}; eksik ya da fazla satırı çöz",
                 alan="beklenen_satir_sayisi",
+            )
+    _toplamlari_denetle(oturum, okuma_id, tamlik)
+
+
+def _toplamlari_denetle(oturum: Session, okuma_id: int, tamlik: Tamlik) -> None:
+    """Tamlıkta verilen toplamlar yazılan satırlarla tutmalı (karar 2026-09-17).
+
+    Üç denetim, her biri yalnız ilgili alanlar verilmişse: toplam giriş =
+    yazılan ARTTIR toplamı; toplam çıkış = yazılan AZALT toplamı; açılış +
+    giriş − çıkış = kapanış (giriş/çıkış yazılan satırlardan). Belgenin
+    söylediği yazılır, aritmetiği uygulama denetler; tutmuyorsa
+    ``MUTABAKAT_FARKI`` ve belge kayıtlı olmaz.
+    """
+    e, k, kk, os_ = sema.etki, sema.kayit, sema.kayit_kaynak, sema.okuma_satir
+    bu_okumadan = (
+        select(kk.c.id)
+        .select_from(kk.join(os_, os_.c.id == kk.c.okuma_satir_id))
+        .where(
+            kk.c.kayit_id == e.c.kayit_id,
+            kk.c.durum == sz.KaynakDurumu.AKTIF.value,
+            os_.c.okuma_id == okuma_id,
+        )
+        .exists()
+    )
+    arttir = func.coalesce(
+        func.sum(case((e.c.yon == sz.Yon.ARTTIR.value, e.c.tutar_kurus), else_=0)), 0
+    )
+    azalt = func.coalesce(
+        func.sum(case((e.c.yon == sz.Yon.AZALT.value, e.c.tutar_kurus), else_=0)), 0
+    )
+    satir = oturum.execute(
+        select(arttir, azalt)
+        .select_from(e.join(k, k.c.id == e.c.kayit_id))
+        .where(k.c.durum == sz.KayitDurumu.AKTIF.value, bu_okumadan)
+    ).one()
+    giris, cikis = int(satir[0]), int(satir[1])
+
+    if tamlik.toplam_giris_kurus is not None and tamlik.toplam_giris_kurus != giris:
+        raise sz.MutabakatFarki(
+            f"verilen toplam giriş {tamlik.toplam_giris_kurus} kuruş, yazılan "
+            f"satırların girişi {giris}; toplamı belgeden aynen al ya da eksik "
+            "satırı çöz",
+            alan="toplam_giris_kurus",
+        )
+    if tamlik.toplam_cikis_kurus is not None and tamlik.toplam_cikis_kurus != cikis:
+        raise sz.MutabakatFarki(
+            f"verilen toplam çıkış {tamlik.toplam_cikis_kurus} kuruş, yazılan "
+            f"satırların çıkışı {cikis}; toplamı belgeden aynen al ya da eksik "
+            "satırı çöz",
+            alan="toplam_cikis_kurus",
+        )
+    if (
+        tamlik.acilis_bakiyesi_kurus is not None
+        and tamlik.kapanis_bakiyesi_kurus is not None
+    ):
+        beklenen_kapanis = tamlik.acilis_bakiyesi_kurus + giris - cikis
+        if beklenen_kapanis != tamlik.kapanis_bakiyesi_kurus:
+            raise sz.MutabakatFarki(
+                f"açılış {tamlik.acilis_bakiyesi_kurus} + giriş {giris} − çıkış "
+                f"{cikis} = {beklenen_kapanis} kuruş, verilen kapanış "
+                f"{tamlik.kapanis_bakiyesi_kurus}; eksik ya da fazla satırı çöz",
+                alan="kapanis_bakiyesi_kurus",
             )
 
 

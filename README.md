@@ -588,12 +588,20 @@ Gözlemler:
   alanını yanlış verdi (701259; doğrusu 699559) ve bunu kendisi fark edip
   bildirdi. `okuma_tamamla` yalnız satır sayısını karşılaştırdığı için
   (C07'nin 4.5 hâli) belge yine KAYITLI oldu; yanlış toplam okuma 1'in
-  tamlık kaydında duruyor. **Karar bekliyor:** `okuma_tamamla`
-  verilen toplam giriş/çıkış ve açılış+giriş−çıkış=kapanış eşitliğini
-  yazılan satırlarla karşılaştırsın mı (`MUTABAKAT_FARKI`)? Yanlış tamlık
-  kaydının düzeltilmesi Aşama 8'in (yeni okuma sürümü / geçersizleştirme)
-  konusu. Talimat 0.2'ye "toplamları belgeden aynen al, kendin toplama"
-  eklendi.
+  tamlık kaydında duruyor. **Karar (2026-09-17, Abdüllatif): üç denetim
+  eklendi** (`belgeler._toplamlari_denetle`, `okuma_tamamla` ve
+  `belge_kaydet` içinde): verilen toplam giriş = yazılan ARTTIR toplamı,
+  verilen toplam çıkış = yazılan AZALT toplamı, açılış + giriş − çıkış =
+  verilen kapanış; tutmayan `MUTABAKAT_FARKI` (alan adıyla), belge kayıtlı
+  olmaz, hiçbir durum değişmez; verilmeyen alan denetlenmez (yalnız kapanış
+  verilmişse açılış bilinmediğinden eşitlik aranmaz). Toplamlar bu okumanın
+  AKTIF kaynaklı satırlarına bağlı AKTIF kayıtların etkilerinden alınır.
+  Test (`tests/test_kayitlar.py`): tutan toplamlarla KAYITLI; giriş, çıkış
+  ve kapanış uyuşmazlığı ayrı ayrı ret ve belge OKUNUYOR kalır; verilmeyen
+  alan denetlenmez; eksik satır yazılınca aynı toplamlarla KAYITLI. Yanlış
+  tamlık kaydının düzeltilmesi Aşama 8'in (yeni okuma sürümü /
+  geçersizleştirme) konusu. Talimat 0.2'ye "toplamları belgeden aynen al,
+  kendin toplama" eklendi.
 * Devreden açılış bakiyesi (0,68 TL) yine bakiyeye girmedi; açık karar
   (Aşama 5 kapısı notu).
 
@@ -910,11 +918,12 @@ Cowork'un "bitti" bildirimidir: okuma `TAMAMLANDI`, belge `HAZIR`, ardından
 `etkin_okuma_id` bu okuma; ek onay yok. Koşullar: her satır sonuçlanmış
 (`YAZILDI`, `MEVCUDA_BAGLANDI`, `KAPSAM_DISI`; aksi `BELGE_HAZIR_DEGIL`) ve
 tamlıkta beklenen satır sayısı verildiyse yazılan satır sayısıyla aynı (aksi
-`MUTABAKAT_FARKI`). Koşul sağlanmazsa hiçbir durum değişmez: okuma `ACIK`
-kalır, eksik satır gönderilip yeniden tamamlanır. Bu teslimde mutabakat
-yalnız satır sayısıdır; bakiye ve toplam alanları saklanır, etkilerle
-karşılaştırma 4.6'da `hesaplamalar` gelince eklenir; açık şüphe koşulu
-Aşama 7'de. `belge_kaydet(belge_id, gorulen_surum)` `HAZIR` kalmış belgeyi
+`MUTABAKAT_FARKI`), tamlıkta verilen toplam giriş / toplam çıkış yazılan
+satırların ARTTIR / AZALT toplamıyla aynı ve açılış + giriş − çıkış =
+kapanış (karar 2026-09-17, `_toplamlari_denetle`; verilmeyen alan
+denetlenmez; ayrıntı Aşama 6 kapısı notunda). Koşul sağlanmazsa hiçbir
+durum değişmez: okuma `ACIK` kalır, eksik satır gönderilip yeniden
+tamamlanır. Açık şüphe koşulu Aşama 7'de. `belge_kaydet(belge_id, gorulen_surum)` `HAZIR` kalmış belgeyi
 (Aşama 7'de karar sonrası) koşulları yeniden denetleyerek `KAYITLI` yapar;
 sürüm uyuşmazsa `HEDEF_SURUMU_DEGISTI`. Belge sürümü her durum
 değişiminde bir artar (ARSIVLENDI 1 → OKUNUYOR 2 → HAZIR 3 → KAYITLI 4).
