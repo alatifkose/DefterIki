@@ -12,18 +12,20 @@ Bu modül kural koymaz: ``onaylar.karar_uygula`` sürüm denetimini,
 pencereye yerel saat olarak verilir (veritabanında UTC).
 
 Teslim 6.1: ``degisti_mi``. Teslim 6.2: ``bekleyenler``, ``talep_ayrintisi``,
-``karar_ver``. 6.3 bakiye ve hareket listesi buraya eklenir.
+``karar_ver``. Teslim 6.3: ``hesaplar``, ``bakiye``, ``hareketler``,
+``belgeler``, ``belge_dosya_yolu``; para ``tutar_metni`` ile gösterilir.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from defteriki import nesneler, onaylar
+from defteriki import arsiv, belgeler, hesaplamalar, nesneler, onaylar
 from defteriki import sozlesmeler as sz
 from defteriki.ayarlar import Ayarlar
 from defteriki.veritabani import Veritabani, veritabani_ac
@@ -80,11 +82,58 @@ class KararSonucu:
     nesne_surumu: int
 
 
+@dataclass(frozen=True, slots=True)
+class HesapSecenegi:
+    """Hareket görünümünde seçilebilen AKTIF nesne."""
+
+    nesne_id: int
+    seviye: int
+    ozet: str
+
+
+@dataclass(frozen=True, slots=True)
+class BakiyeOzeti:
+    nesne_id: int
+    para_birimi: str
+    arttir_kurus: int
+    azalt_kurus: int
+    bakiye_kurus: int
+    bekleyen_kayit_sayisi: int
+    """Yazılmış ama belgesi KAYITLI olmadığı için bakiyeye girmeyenler."""
+
+
+@dataclass(frozen=True, slots=True)
+class HareketSatiri:
+    kayit_id: int
+    islem_tarihi: date
+    valor_tarihi: date | None
+    aciklama: str
+    yon: str
+    tutar_kurus: int
+    para_birimi: str
+    kayitli: bool
+    belge_idleri: tuple[int, ...]
+    """Kaydı destekleyen belgeler; kaynak belgeyi açmak için."""
+
+
+@dataclass(frozen=True, slots=True)
+class BelgeSatiri:
+    belge_id: int
+    durum: str
+    surum: int
+    kaynak_adi: str
+    boyut: int
+    mime: str
+    olusturma_zamani: datetime
+    """Yerel saat, dilim bilgisiyle."""
+
+
 class PencereIslevleri:
     """Tek pencereye ait bağlam; ``pencere_islevleri_ac`` ile kurulur."""
 
-    def __init__(self, veritabani: Veritabani) -> None:
+    def __init__(self, veritabani: Veritabani, belge_dizini: Path) -> None:
         self._veritabani = veritabani
+        self._belge_dizini = belge_dizini
         self._son_sayac: int | None = None
 
     # --- değişiklik (6.1) -------------------------------------------------------------
@@ -175,13 +224,96 @@ class PencereIslevleri:
             )
             return _karar_sonucu(oturum, talep)
 
+    # --- bakiye ve hareketler (6.3) ---------------------------------------------------
+
+    def hesaplar(self) -> list[HesapSecenegi]:
+        """Seçilebilen AKTIF nesneler, kimlik sırasıyla, özetiyle."""
+        with self._veritabani.okuma_islemi() as oturum:
+            nesneler_ = nesneler.nesne_bul(
+                oturum,
+                durumlar=(sz.NesneDurumu.AKTIF,),
+                sayfalama=sz.Sayfalama(sinir=sz.AZAMI_SAYFA_BOYUTU),
+            )
+            ozellikler = nesneler.ozellikleri_getir(oturum, [n.id for n in nesneler_])
+            return [
+                HesapSecenegi(n.id, n.seviye, _ozet(ozellikler.get(n.id, ())))
+                for n in nesneler_
+            ]
+
+    def bakiye(self, nesne_id: int) -> BakiyeOzeti:
+        """Etkin bakiye (yalnız KAYITLI belgeler; ``hesaplamalar.etkin_bakiye``)."""
+        with self._veritabani.okuma_islemi() as oturum:
+            b = hesaplamalar.etkin_bakiye(oturum, nesne_id=nesne_id)
+        return BakiyeOzeti(
+            nesne_id=b.nesne_id,
+            para_birimi=b.para_birimi.value,
+            arttir_kurus=b.arttir_kurus,
+            azalt_kurus=b.azalt_kurus,
+            bakiye_kurus=b.bakiye_kurus,
+            bekleyen_kayit_sayisi=b.bekleyen_kayit_sayisi,
+        )
+
+    def hareketler(self, nesne_id: int) -> list[HareketSatiri]:
+        """Nesnenin hareketleri tarih sırasıyla; kayıtlı bayrağı ve belgeleriyle."""
+        with self._veritabani.okuma_islemi() as oturum:
+            satirlar = hesaplamalar.hareketleri_listele(
+                oturum,
+                nesne_id=nesne_id,
+                sayfalama=sz.Sayfalama(sinir=sz.AZAMI_SAYFA_BOYUTU),
+            )
+            return [
+                HareketSatiri(
+                    kayit_id=h.kayit_id,
+                    islem_tarihi=h.islem_tarihi,
+                    valor_tarihi=h.valor_tarihi,
+                    aciklama=h.aciklama or "",
+                    yon=h.yon.value,
+                    tutar_kurus=h.tutar_kurus,
+                    para_birimi=h.para_birimi.value,
+                    kayitli=h.kayitli,
+                    belge_idleri=belgeler.kaydin_belge_idleri(oturum, h.kayit_id),
+                )
+                for h in satirlar
+            ]
+
+    def belgeler(self) -> list[BelgeSatiri]:
+        """Belgeler yeniden eskiye, durumuyla."""
+        with self._veritabani.okuma_islemi() as oturum:
+            liste = belgeler.belgeleri_listele(
+                oturum, sayfalama=sz.Sayfalama(sinir=sz.AZAMI_SAYFA_BOYUTU)
+            )
+        return [
+            BelgeSatiri(
+                belge_id=b.belge.id,
+                durum=b.belge.durum.value,
+                surum=b.belge.surum,
+                kaynak_adi=b.dosya.kaynak_adi,
+                boyut=b.dosya.boyut,
+                mime=b.dosya.mime,
+                olusturma_zamani=yerel_saat(b.belge.olusturma_zamani),
+            )
+            for b in liste
+        ]
+
+    def belge_dosya_yolu(self, belge_id: int) -> Path:
+        """Belgenin arşivdeki dosyası; pencere işletim sistemine açtırır.
+
+        Belge yoksa ``BELGE_YOK``, dosya arşivde yerinde değilse ``ARSIV_EKSIK``.
+        """
+        with self._veritabani.okuma_islemi() as oturum:
+            dosya = belgeler.belge_getir(oturum, belge_id).dosya
+        yol = arsiv.arsiv_yolu(self._belge_dizini, dosya.goreli_yol)
+        if not arsiv.arsivde_var_mi(self._belge_dizini, dosya.goreli_yol, dosya.boyut):
+            raise sz.ArsivEksik("belgenin dosyası arşivde yok", alan="belge_id")
+        return yol
+
     def kapat(self) -> None:
         self._veritabani.kapat()
 
 
 def pencere_islevleri_ac(ayarlar: Ayarlar) -> PencereIslevleri:
     """Ayarlardaki veritabanı için pencere işlevlerini kurar; dosya oluşturmaz."""
-    return PencereIslevleri(veritabani_ac(ayarlar))
+    return PencereIslevleri(veritabani_ac(ayarlar), ayarlar.belge_dizini)
 
 
 # --- çeviriler ------------------------------------------------------------------------
@@ -190,6 +322,15 @@ def pencere_islevleri_ac(ayarlar: Ayarlar) -> PencereIslevleri:
 def yerel_saat(utc_zaman: datetime) -> datetime:
     """Veritabanındaki dilimsiz UTC zamanı yerel saate çevirir (dilim bilgisiyle)."""
     return utc_zaman.replace(tzinfo=UTC).astimezone()
+
+
+def tutar_metni(kurus: int, para_birimi: str = "TRY") -> str:
+    """Kuruşu Türkçe para biçimine çevirir: ``-2635`` → ``-26,35 TL``."""
+    isaret = "-" if kurus < 0 else ""
+    lira, kalan = divmod(abs(kurus), 100)
+    lira_metni = f"{lira:,}".replace(",", ".")
+    birim = "TL" if para_birimi == "TRY" else para_birimi
+    return f"{isaret}{lira_metni},{kalan:02d} {birim}"
 
 
 def _ozet(ozellikler: Sequence[nesneler.Ozellik]) -> str:

@@ -14,8 +14,9 @@ belge/hareket, durum/sorgu; geçici onay komutu) ve 5.3 (Cowork talimatı
 `docs/cowork.md` 0.1, gerçek ekstre denemesi başarılı, tekrar denemesi
 yazmadı) bitti; **Aşama 5 kapısı geçildi (2026-09-17)**, bulgular "Cowork
 talimatı" bölümünde. Aşama 6 (ilk pencere) sürüyor: 6.1 kabuk ve değişiklik
-izleme, 6.2 karar kutusu (onay pencereden) bitti (`uv run
-defteriki-arayuz`); 6.3 bakiye ve hareket görünümü sırada.
+izleme, 6.2 karar kutusu (onay pencereden), 6.3 bakiye ve hareket görünümü
+bitti (`uv run defteriki-arayuz`); Aşama 6 kapısı sırada (Akbank ekstresi
+denemesi onaylar pencereden, `defteriki-onay` silinir).
 **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
@@ -89,8 +90,12 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Karar kutusu (Teslim 6.2): bekleyen talepler, hedef nesne ve özellikleri,
   kutucukla şart seçimi, Onayla / Reddet / Ertele; `pencere_islevleri`
   üzerinden `onaylar.karar_uygula` (`arayuz/karar_kutusu.py`)
+* Bakiye ve hareket görünümü (Teslim 6.3): hesap seçimi, etkin bakiye,
+  hareketler kayıtlı/kayıtlı değil işaretiyle ve belgeleriyle, belge
+  listesi, kaynak belgeyi işletim sistemiyle açma (`arayuz/hareketler.py`;
+  `belgeler.belgeleri_listele`, `belgeler.kaydin_belge_idleri`)
 
-Henüz yok: bakiye ve hareket görünümü (6.3), devreden
+Henüz yok: Aşama 6 kapısı (ekstre denemesi pencereden), devreden
 bakiye kararı, diğer işlem sözleşmeleri (Aşama 8), mükerrerlik
 karşılaştırması (Aşama 7).
 
@@ -528,6 +533,47 @@ yenilenir; pencere kapanıp açılınca bekleyenler yerinde (S19 ilk yarısı).
 saat, ayrıntı (üstler, özellikler), olmayan talep, şart seçimiyle onay,
 ret, sonuçlanmış talebe ikinci karar reddi, sürüm uyuşmazlığı, boş gerekçe
 None ve aktör KULLANICI.
+
+### Bakiye ve hareket görünümü (Teslim 6.3)
+
+İkinci sekme "Hareketler". Görünüm toplama yapmaz, bakiyeyi hesaplamaz;
+her sayı `pencere_islevleri`den, o da `hesaplamalar` ve `belgeler`den
+gelir. Pencere ile `sorgu` aracı aynı işlevi çağırdığı için aynı tutarı
+gösterir (testle doğrulanır).
+
+* Aşama 4'e eklenen işlevler (`belgeler.py`): `belgeleri_listele`
+  (belge + arşiv dosyası, yeniden eskiye, sayfalı) ve `kaydin_belge_idleri`
+  (kaydı AKTIF kaynakla destekleyen satırların belgeleri; kaynak belgeyi
+  açmak için).
+* `pencere_islevleri` (6.3 soruları): `hesaplar()` AKTIF nesneler kimlik
+  sırasıyla ve özetiyle (onay bekleyenler listeye girmez); `bakiye(nesne_id)`
+  → `hesaplamalar.etkin_bakiye` (giriş, çıkış, bakiye, kayıtlı olmayan
+  kayıt sayısı); `hareketler(nesne_id)` → `hesaplamalar.hareketleri_listele`
+  + her kaydın belgeleri (kayıtlı bayrağıyla); `belgeler()` yeniden eskiye
+  durum, sürüm, kaynak adı, boyut, MIME, yerel zaman; `belge_dosya_yolu
+  (belge_id)` arşivdeki dosya (`arsiv.arsiv_yolu`; yoksa `ARSIV_EKSIK`,
+  belge yoksa `BELGE_YOK`). `tutar_metni(kurus)`: `-2635` → `-26,35 TL`.
+  `pencere_islevleri_ac` artık belge dizinini de alır.
+* `arayuz/hareketler.py` (`HareketGorunumu`): üstte hesap seçimi
+  (`QComboBox`, "nesne 2 · seviye 1 · ad=ME; iban=…") ve bakiye satırı
+  ("Bakiye: 1.400,00 TL · giriş … · çıkış … · kayıtlı olmayan kayıt: 1");
+  ortada hareket tablosu (Tarih, Açıklama, Yön giriş/çıkış, Tutar, Durum
+  "Kayıtlı" / "Yazıldı, kayıtlı değil", Belge kimlikleri); altta belge
+  tablosu (Belge, Kaynak adı, Durum, Sürüm, Zaman). "Belgeyi aç" ya da çift
+  tık: `belge_dosya_yolu` → işletim sisteminin varsayılan programı
+  (`QDesktopServices.openUrl`); açıcı test için enjekte edilir; dosya yoksa
+  mesaj, açma yok. `yenile()` seçili hesabı ve belgeyi korur; pencere bunu
+  değişiklik izleyicisine bağlar.
+
+Test (`tests/test_hareketler.py`): ekstre MCP araçlarıyla işlenir (bir belge
+KAYITLI, ikinci OKUNUYOR); `tutar_metni`; yalnız AKTIF hesaplar; bakiye ve
+bekleyen sayısı `sorgu` aracıyla birebir, hareketler kayıtlı bayrağı ve
+belge kimlikleriyle; belge listesi yeniden eskiye; dosya yolu ve
+`ARSIV_EKSIK` / `BELGE_YOK`; boş defter mesajı; görünümde bakiye satırı
+`sorgu` ile aynı, tablolar dolu; belge açma açıcıya yolu verir; seçimsiz
+açma ve arşivi eksik belge mesajı; yenileme seçili hesabı korur; ikinci
+sekme değişiklikte yenilenir ve pencerenin en küçük boyut ipucu 1280×720'ye
+sığar.
 
 ## Veritabanı
 

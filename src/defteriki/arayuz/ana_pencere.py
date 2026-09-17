@@ -1,10 +1,10 @@
-"""Ana pencere (Teslim 6.1 kabuk, 6.2 karar kutusu).
+"""Ana pencere (Teslim 6.1 kabuk, 6.2 karar kutusu, 6.3 hareketler).
 
-Başlık, sekmeli orta alan ve durum çubuğu. Durum çubuğu solda veritabanı
-yolunu, sağda ortamı, şema sürümünü ve son değişiklik zamanını (yerel saat)
-gösterir. Değişiklik izleyicisi "veri değişti" deyince açık görünümler
-yenilenir; karar kutusu sekmesinin başlığı bekleyen sayısını taşır.
-Bakiye/hareket görünümü (6.3) ikinci sekme olarak eklenecek.
+Başlık, sekmeli orta alan ve durum çubuğu. Sekmeler: "Karar kutusu (n)"
+(n bekleyen sayısı) ve "Hareketler". Durum çubuğu solda veritabanı yolunu,
+sağda ortamı, şema sürümünü ve son değişiklik zamanını (yerel saat)
+gösterir. Değişiklik izleyicisi "veri değişti" deyince iki görünüm de
+yenilenir.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QLabel, QMainWindow, QStatusBar, QTabWidget
 
 from defteriki.arayuz.degisiklik_izleme import VARSAYILAN_ARALIK_MS, DegisiklikIzleyici
+from defteriki.arayuz.hareketler import HareketGorunumu
 from defteriki.arayuz.karar_kutusu import KararKutusu
 from defteriki.baslangic import Hazirlik
 from defteriki.pencere_islevleri import PencereIslevleri
@@ -24,6 +25,7 @@ PENCERE_GENISLIK = 1280
 PENCERE_YUKSEKLIK = 720
 METIN_DEGISIKLIK_YOK = "Değişiklik: henüz yok"
 SEKME_KARAR_KUTUSU = "Karar kutusu"
+SEKME_HAREKETLER = "Hareketler"
 
 
 class AnaPencere(QMainWindow):
@@ -44,6 +46,8 @@ class AnaPencere(QMainWindow):
         self.sekmeler.addTab(self.karar_kutusu, SEKME_KARAR_KUTUSU)
         self.karar_kutusu.yenilendi.connect(self._karar_sekmesini_adlandir)
         self._karar_sekmesini_adlandir(self.karar_kutusu.bekleyen_sayisi)
+        self.hareketler = HareketGorunumu(islevler)
+        self.sekmeler.addTab(self.hareketler, SEKME_HAREKETLER)
         self.setCentralWidget(self.sekmeler)
 
         self.ortam_etiketi = QLabel(f"Ortam: {ayarlar.ortam.value}")
@@ -58,6 +62,7 @@ class AnaPencere(QMainWindow):
         self.izleyici = DegisiklikIzleyici(islevler, yoklama_araligi_ms, self)
         self.izleyici.degisti.connect(self._degisikligi_goster)
         self.izleyici.degisti.connect(self.karar_kutusu.yenile)
+        self.izleyici.degisti.connect(self.hareketler.yenile)
         self.izleyici.durdu.connect(self._izleme_durdu)
         self.izleyici.baslat()
 

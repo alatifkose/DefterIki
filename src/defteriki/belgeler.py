@@ -327,6 +327,71 @@ def belge_getir(oturum: Session, belge_id: int) -> BelgeAyrinti:
     return BelgeAyrinti(belge, _dosya(dosya._mapping), okumalar)  # pyright: ignore[reportPrivateUsage]
 
 
+@dataclass(frozen=True, slots=True)
+class BelgeVeDosya:
+    belge: Belge
+    dosya: ArsivDosyasi
+
+
+def belgeleri_listele(
+    oturum: Session, *, sayfalama: sz.Sayfalama = sz.Sayfalama()
+) -> list[BelgeVeDosya]:
+    """Belgeler arşiv dosyasıyla, yeniden eskiye (pencere belge listesi)."""
+    satirlar = oturum.execute(
+        select(sema.belge, sema.arsiv_dosya)
+        .join(sema.arsiv_dosya, sema.arsiv_dosya.c.id == sema.belge.c.dosya_id)
+        .order_by(sema.belge.c.id.desc())
+        .limit(sayfalama.sinir)
+        .offset(sayfalama.baslangic)
+    ).all()
+    sonuc: list[BelgeVeDosya] = []
+    for s in satirlar:
+        m = s._mapping  # pyright: ignore[reportPrivateUsage]
+        sonuc.append(
+            BelgeVeDosya(
+                belge=Belge(
+                    id=int(m[sema.belge.c.id]),
+                    dosya_id=int(m[sema.belge.c.dosya_id]),
+                    durum=sz.BelgeDurumu(m[sema.belge.c.durum]),
+                    etkin_okuma_id=m[sema.belge.c.etkin_okuma_id],
+                    surum=int(m[sema.belge.c.surum]),
+                    olusturma_zamani=m[sema.belge.c.olusturma_zamani],
+                ),
+                dosya=ArsivDosyasi(
+                    id=int(m[sema.arsiv_dosya.c.id]),
+                    sha256=str(m[sema.arsiv_dosya.c.sha256]),
+                    boyut=int(m[sema.arsiv_dosya.c.boyut]),
+                    mime=str(m[sema.arsiv_dosya.c.mime]),
+                    uzanti=str(m[sema.arsiv_dosya.c.uzanti]),
+                    kaynak_adi=str(m[sema.arsiv_dosya.c.kaynak_adi]),
+                    goreli_yol=str(m[sema.arsiv_dosya.c.goreli_yol]),
+                    olusturma_zamani=m[sema.arsiv_dosya.c.olusturma_zamani],
+                ),
+            )
+        )
+    return sonuc
+
+
+def kaydin_belge_idleri(oturum: Session, kayit_id: int) -> tuple[int, ...]:
+    """Kaydı destekleyen (AKTIF kaynak) satırların belgeleri, artan kimlikle."""
+    kk, os_, ok = sema.kayit_kaynak, sema.okuma_satir, sema.okuma
+    idler = oturum.execute(
+        select(ok.c.belge_id)
+        .distinct()
+        .select_from(
+            kk.join(os_, os_.c.id == kk.c.okuma_satir_id).join(
+                ok, ok.c.id == os_.c.okuma_id
+            )
+        )
+        .where(
+            kk.c.kayit_id == kayit_id,
+            kk.c.durum == sz.KaynakDurumu.AKTIF.value,
+        )
+        .order_by(ok.c.belge_id)
+    ).scalars()
+    return tuple(int(i) for i in idler)
+
+
 # --- okuma ---------------------------------------------------------------------
 
 
