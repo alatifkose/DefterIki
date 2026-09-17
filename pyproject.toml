@@ -18,7 +18,6 @@ dependencies = [
 [project.scripts]
 defteriki = "defteriki.baslangic:main"
 defteriki-mcp = "defteriki.mcp_kapisi:main"
-defteriki-onay = "defteriki.onay_komutu:main"
 defteriki-arayuz = "defteriki.arayuz.baslat:main"
 
 [build-system]

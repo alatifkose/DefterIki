@@ -1,7 +1,8 @@
 # DEFTERIKI — Cowork Talimatı
 
-**Talimat sürümü: 0.1** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
-bu sürümü okumaya yazar).
+**Talimat sürümü: 0.2** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
+bu sürümü okumaya yazar). 0.2: kullanıcı onayı pencereden; tamlık
+toplamları belgeden aynen alınır.
 
 Bu belge, Cowork'un bir banka belgesini DEFTERIKI'ye nasıl işleyeceğini
 anlatır. Cowork belgeyi okur ve MCP araçlarını çağırır. DEFTERIKI kayıtları
@@ -104,7 +105,8 @@ Sıra:
    * Seviye gönderme; DEFTERIKI üstlerden hesaplar.
    * `kaynak` ver: hangi belgeden ve belgenin neresinden çıkardığını söyler.
 4. Yanıt `BEKLIYOR` + `talep_id` + `nesne_id` gelir. Nesne `ONAY_BEKLIYOR`
-   yazıldı; kullanıcı `defteriki-onay` komutuyla şart seçip onaylayacak.
+   yazıldı; kullanıcı DEFTERIKI penceresindeki karar kutusundan şart seçip
+   onaylayacak.
    **Kendi kendine onay üretemezsin, onayı taklit edemezsin.**
 5. Kullanıcıya "şu nesneyi önerdim, onayını bekliyorum" de. Sonra
    `islem_durumu(talep_id)` ile sor. Aralığı kendin uzat (birkaç saniye,
@@ -118,12 +120,13 @@ Sıra:
 
 `okuma_baslat(belge_id, islem_anahtari, tamlik={beklenen_satir_sayisi,
 acilis_bakiyesi_kurus, kapanis_bakiyesi_kurus, toplam_giris_kurus,
-toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.1`) yazılır.
+toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.2`) yazılır.
 
 `beklenen_satir_sayisi` belgede saydığın hareket sayısıdır. Bunu ver;
-DEFTERIKI tamamlama anında yazılan satır sayısıyla karşılaştırır. Bakiye
-alanlarını belgede varsa kuruş tam sayı olarak ver, yoksa boş bırak;
-**tahminle doldurma.** Zarf `okuma_id` döndürür; belge `OKUNUYOR` olur.
+DEFTERIKI tamamlama anında yazılan satır sayısıyla karşılaştırır. Bakiye ve
+toplam alanlarını belgede yazıyorsa **belgeden aynen** kuruş tam sayı olarak
+al; kendin toplama, hesaplama; belgede yoksa boş bırak; **tahminle
+doldurma.** Zarf `okuma_id` döndürür; belge `OKUNUYOR` olur.
 
 ### Adım 6 — Hareketleri yaz: `hareket_yaz`
 
@@ -239,4 +242,5 @@ Okuma (anahtar yok): `sistem_durumu`, `oturum_baglami`, `nesne_bul`,
 Değişiklik (anahtar zorunlu): `nesne_tanimla` (GONDER), `belge_al`,
 `okuma_baslat`, `hareket_yaz`, `okuma_tamamla`, `belge_kaydet`.
 
-Kullanıcı onayı MCP'de değildir; kullanıcı `uv run defteriki-onay` ile verir.
+Kullanıcı onayı MCP'de değildir; kullanıcı DEFTERIKI penceresinin karar
+kutusundan verir (`uv run defteriki-arayuz`).

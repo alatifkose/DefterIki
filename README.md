@@ -15,14 +15,15 @@ belge/hareket, durum/sorgu; geçici onay komutu) ve 5.3 (Cowork talimatı
 yazmadı) bitti; **Aşama 5 kapısı geçildi (2026-09-17)**, bulgular "Cowork
 talimatı" bölümünde. Aşama 6 (ilk pencere) sürüyor: 6.1 kabuk ve değişiklik
 izleme, 6.2 karar kutusu (onay pencereden), 6.3 bakiye ve hareket görünümü
-bitti (`uv run defteriki-arayuz`); Aşama 6 kapısı sırada (Akbank ekstresi
-denemesi onaylar pencereden, `defteriki-onay` silinir).
+bitti; **Aşama 6 kapısı geçildi (2026-09-17)**: Akbank ekstresi onaylar
+pencereden verilerek yeniden işlendi, bakiye pencerede görüldü; geçici
+`defteriki-onay` komutu silindi. Talimat sürümü 0.2.
 **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
-satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
-çağıran geçici arayüzdür, onay mekanizması terminale bağlanmaz); gerçek
-ekstre yerelde gelen dizininden, depoya girmez. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
+satırından verildi (MCP'ye açılmadı; onay mekanizması terminale bağlanmadı;
+komut Aşama 6 kapısında silindi, onay artık pencerede); gerçek ekstre
+yerelde gelen dizininden, depoya girmez. **Karar (2026-09-16, Abdüllatif):** DEFTERIKI tek bütünleşik
 defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 4.3 buna göre yeniden kuruldu. Bitenler:
 
@@ -66,9 +67,8 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * MCP yanıt zarfı ve güvenli hata çevirisi; ilk değişiklik aracı
   `nesne_tanimla` (FORM/GONDER) MCP'de (`zarf.py`, `mcp_araclari.py`,
   `mcp_kapisi.py`)
-* Nesne araçları `nesne_bul`, `nesne_getir`, `oturum_baglami` (C16) ve
-  geçici kullanıcı onayı komutu `uv run defteriki-onay` (`onay_komutu.py`;
-  MCP'ye açık değil)
+* Nesne araçları `nesne_bul`, `nesne_getir`, `oturum_baglami` (C16);
+  geçici onay komutu (`defteriki-onay`) Aşama 6 kapısında silindi
 * Belge ve hareket araçları `belge_al`, `belge_getir`, `okuma_baslat`,
   `hareket_yaz` (paket, atomik), `okuma_tamamla`, `belge_kaydet`: bir ekstre
   MCP araçlarıyla uçtan uca işlenir; zarf her adımda `belge_kaydi` söyler
@@ -76,7 +76,7 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   kalıcı durum), `bekleyen_isler`, `sorgu` (yalnız bakiye ve hareketler;
   serbest SQL yok)
 
-* Cowork talimatı `docs/cowork.md` sürüm 0.1: araç sırası (oturum bağlamı →
+* Cowork talimatı `docs/cowork.md` (sürüm 0.2): araç sırası (oturum bağlamı →
   belge → nesne → okuma → paketler → tamamlama → rapor), işlem anahtarı
   kuralları, yasaklar, hata kodu tepkileri
 
@@ -170,7 +170,7 @@ kaldı: belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapıl
 Her araç aynı zarfı döndürür (`src/defteriki/zarf.py`, Pydantic; SDK JSON
 Schema üretir): `durum` TAMAMLANDI / BEKLIYOR / REDDEDILDI / YENIDEN_DENE;
 `islem_kimligi` (çağrı başına korelasyon kimliği, günlükteki `mcp_arac`
-satırıyla eşleşir); `talimat_surumu` (`docs/cowork.md`, şimdilik `0.1`);
+satırıyla eşleşir); `talimat_surumu` (`docs/cowork.md`, şimdilik `0.2`);
 `belge_id`, `okuma_id`, `nesne_id`, `talep_id`, `hedef_surumu`; `yazilan`,
 `zaten_mevcut`, `bekleyen` sayıları; `belge_kaydi` TANIMLANMADI / KAYITLI;
 `sonraki_adim` (Cowork'a kısa yönerge); `icerik` (aracın kendi sonucu);
@@ -213,7 +213,7 @@ ve ortam değişkeni yok; sunucu üzerinden şema reddi değerleri dışarı
 vermez; bilinmeyen araç; araç listesi ve şemalar; sunucu üzerinden GONDER.
 stdio testi (`test_mcp_kapisi.py`) araç listesini ve `talimat_surumu`nu görür.
 
-### Nesne araçları ve geçici onay komutu (Teslim 5.2/1)
+### Nesne araçları (Teslim 5.2/1)
 
 Okuma araçları salt okunur işlemde çalışır, işlem anahtarı istemez.
 
@@ -234,19 +234,11 @@ Okuma araçları salt okunur işlemde çalışır, işlem anahtarı istemez.
   (`onaylar.bekleyenleri_listele`: talep, tür, hedef, sürüm, zaman) alır;
   zarf `bekleyen` sayısını taşır. "Seçili defter" tek defter kararıyla yok.
 
-**Geçici onay komutu** (`src/defteriki/onay_komutu.py`, `uv run
-defteriki-onay`; karar 2026-09-17). Aşama 6 ekranı gelene kadar kullanıcı
-onayı buradan verilir. İki sınır: MCP'ye açılmaz (`YETENEKLER`de yok, Cowork
-ulaşamaz, kendi kendine onay üretemez; aktör `KULLANICI`); **onay
-mekanizması terminale bağlanmaz** — karar mantığı, sürüm denetimi ve etkiler
-`onaylar.karar_uygula` ve `nesneler`de, komut yalnız onları çağıran geçici
-arayüz; ekran gelince dosya silinir, işlevler kalır. Alt komutlar:
-`bekleyenler`; `goster TALEP` (talep, hedef nesne, özellikler kimlikleriyle
-ve şart seçimi ipucu); `onayla TALEP --surum N [--sart ÖZELLİK_ID ...]
-[--gerekce ...]`; `reddet TALEP --surum N [--gerekce ...]`. `--surum`
-kullanıcının gördüğü hedef sürümüdür; değişmişse `HEDEF_SURUMU_DEGISTI`,
-karar uygulanmaz. Hata stderr'e, çıkış `1`. Not: script girişi
-`pyproject.toml`de; `uv sync` sonrası kullanılabilir.
+**Geçici onay komutu** (`defteriki-onay`, karar 2026-09-17) Aşama 6
+ekranı gelene kadar kullanıcı onayını verdi; MCP'ye açılmadı, karar mantığı
+`onaylar.karar_uygula`da kaldı. Aşama 6 kapısında (2026-09-17) dosyası,
+testi ve `pyproject.toml` girişi silindi; onay artık pencerenin karar
+kutusundan verilir.
 
 Test (`tests/test_mcp_nesne_araclari.py`): boş sonuç yönlendirmesi; mevcut
 nesne özellikleriyle, seviye ve durum filtresi, sayfalama; eşleşme türüyle
@@ -254,9 +246,6 @@ ve normalizasyonsuz; geçersiz sayfalama; getir (özellik, üst, alt, sürüm,
 bekleyen nesnede yönerge); olmayan nesne; oturum bağlamı boş defter ve
 Garanti senaryosu (son nesneler yeniden eskiye, alan adı sayımı, bekleyen
 iş); sunucu üzerinden dört araç ve şema reddi.
-Test (`tests/test_onay_komutu.py`): bekleyenler ve göster; şart seçerek
-onay (nesne AKTIF, sürüm 2, şart kalıcı); red (SILINDI); eski sürüm, olmayan
-talep ve yabancı şart uygulanmaz; onay komutu MCP yeteneklerinde yok.
 
 ### Belge ve hareket araçları (Teslim 5.2/2)
 
@@ -332,7 +321,7 @@ bekleyen işler hedefleriyle ve sayfalı; bakiye yalnız kayıtlı belgeler
 (tarih sınırı, borç ekseni); hareketler kayıtlı bayrağı, filtre, sayfa;
 sorgu hataları; sunucu üzerinden on dört araç, serbest SQL şema reddi.
 
-### Cowork talimatı (Teslim 5.3, sürüm 0.1)
+### Cowork talimatı (Teslim 5.3; sürüm 0.2, Aşama 6 kapısı)
 
 `docs/cowork.md` Cowork'un okuduğu tek talimattır; zarftaki
 `talimat_surumu` (`zarf.TALIMAT_SURUMU`) bu belgenin sürümüdür ve
@@ -359,7 +348,7 @@ işle, onay gerekirse söyle. Günlükten (`mcp_arac`) gözlenen sıra:
 girdiyi düzeltip yeniden gönderdi) → GONDER banka (seviye 0, BEKLIYOR) →
 GONDER hesap (seviye 1, üstü onay bekleyen banka, BEKLIYOR) → `islem_durumu`
 dört kez (3 s, 14 s, 25 s, 5 dk aralıklarla; vazgeçmedi, yeniden önermedi)
-→ kullanıcı `defteriki-onay` ile iki talebi şart seçerek onayladı (banka:
+→ kullanıcı (o gün) `defteriki-onay` ile iki talebi şart seçerek onayladı (banka:
 ad; hesap: IBAN) → `islem_durumu` iki kez TAMAMLANDI → `okuma_baslat`
 (tamlık: 6 satır, açılış/kapanış bakiyesi, giriş/çıkış toplamı) →
 `hareket_yaz` tek paket altı satır → `okuma_tamamla` KAYITLI → `sorgu`
@@ -389,8 +378,8 @@ Bulgular:
   (`setx`) aynı `DEFTERIKI_VERI_KOKU` değerini taşır. Varsayılan AppData
   yolu Windows'ta Claude masaüstü altında güvenilmez; kurulumda bu
   değişken açıkça verilir.
-* `defteriki-onay` zamanları UTC gösteriyor (günlük yerel saat); kullanıcıya
-  yerel saat gösterilmeli (Aşama 6 ekranında ya da komutta).
+* `defteriki-onay` zamanları UTC gösteriyordu; pencere yerel saat gösterir
+  (`pencere_islevleri.yerel_saat`), komut silindi.
 * Açılış bakiyesi: Cowork `tamlik.acilis_bakiyesi_kurus` verdi (68 kuruş),
   bakiye yalnız yazılan hareketlerden hesaplanıyor (−26,35 TL; belgedeki
   kapanış −25,67 TL). Devreden bakiyenin hesaba nasıl gireceği **açık
@@ -493,9 +482,9 @@ bağlantının commit'iyle değişir, kilit tutmaz, `kapat` bağlantıyı bırak
 
 ### Karar kutusu (Teslim 6.2)
 
-Kullanıcı onayı artık pencereden verilir; `defteriki-onay` komutu Aşama 6
-kapısına kadar yedek olarak durur, sonra silinir. Orta alan sekmelidir;
-ilk sekme "Karar kutusu (n)", n bekleyen sayısı.
+Kullanıcı onayı pencereden verilir (`defteriki-onay` Aşama 6 kapısında
+silindi). Orta alan sekmelidir; ilk sekme "Karar kutusu (n)", n bekleyen
+sayısı.
 
 * `pencere_islevleri` (6.2 soruları): `bekleyenler()` BEKLIYOR talepler
   eskiden yeniye, hedef nesnenin ilk üç özelliğiyle özet (`ad=Akbank;
@@ -574,6 +563,39 @@ belge kimlikleriyle; belge listesi yeniden eskiye; dosya yolu ve
 açma ve arşivi eksik belge mesajı; yenileme seçili hesabı korur; ikinci
 sekme değişiklikte yenilenir ve pencerenin en küçük boyut ipucu 1280×720'ye
 sığar.
+
+### Aşama 6 kapısı: ekstre denemesi pencereden (2026-09-17)
+
+Yeni veri kökünde boş veritabanı; aynı Akbank hesap özeti Cowork'a verildi,
+pencere açıktı. Günlükten sıra: `oturum_baglami` → `belge_al` → `nesne_bul`
+→ `nesne_tanimla` FORM → bir kez `GIRDI_GECERSIZ` (Cowork düzeltti) → banka
+ve hesap GONDER (BEKLIYOR) → `islem_durumu` (1,5 dk ve 3 dk sonra BEKLIYOR)
+→ kullanıcı pencerede iki talebi şart seçerek onayladı (banka: `ad`, hesap:
+`iban`; karar aktörü KULLANICI) → `islem_durumu` iki kez TAMAMLANDI →
+`okuma_baslat` → `hareket_yaz` (altı satır) → `okuma_tamamla` KAYITLI →
+`sorgu`. Pencerede "Karar kutusu (2)" doldu, onaylar tıklamayla verildi,
+"Hareketler" sekmesinde bakiye −26,35 TL ve altı hareket "Kayıtlı" görüldü;
+`sorgu` aynı tutarı verdi. Geçici `defteriki-onay` silindi; talimat 0.2.
+
+Gözlemler:
+
+* Cowork boş veritabanında alan adlarını sabahkinden farklı seçti (`tur`
+  yerine `tür` değil `tur`; `hesap_sahibi`, `musteri_no`, faiz oranları
+  gibi yeni alanlar). Talimat "mevcut alan adlarını aynen kullan" diyor;
+  mevcut yokken seçim serbest. Alan adı tutarlılığı ileride kullanımda
+  görülecek (Aşama 7 mükerrerlik şartları alan adına dayanır).
+* **Tamlık toplamları çapraz denetlenmiyor.** Cowork `toplam_cikis_kurus`
+  alanını yanlış verdi (701259; doğrusu 699559) ve bunu kendisi fark edip
+  bildirdi. `okuma_tamamla` yalnız satır sayısını karşılaştırdığı için
+  (C07'nin 4.5 hâli) belge yine KAYITLI oldu; yanlış toplam okuma 1'in
+  tamlık kaydında duruyor. **Karar bekliyor:** `okuma_tamamla`
+  verilen toplam giriş/çıkış ve açılış+giriş−çıkış=kapanış eşitliğini
+  yazılan satırlarla karşılaştırsın mı (`MUTABAKAT_FARKI`)? Yanlış tamlık
+  kaydının düzeltilmesi Aşama 8'in (yeni okuma sürümü / geçersizleştirme)
+  konusu. Talimat 0.2'ye "toplamları belgeden aynen al, kendin toplama"
+  eklendi.
+* Devreden açılış bakiyesi (0,68 TL) yine bakiyeye girmedi; açık karar
+  (Aşama 5 kapısı notu).
 
 ## Veritabanı
 
@@ -1098,7 +1120,6 @@ src/defteriki/    uygulama paketi
   mcp_kapisi.py   uv run defteriki-mcp; MCP sunucusu, araç kaydı, güvenli hata çevirisi
   mcp_araclari.py MCP araç gövdeleri: girdi modeli → Aşama 4 işlevi → zarf
   zarf.py         ortak MCP yanıt zarfı ve hata çevirisi
-  onay_komutu.py  uv run defteriki-onay; geçici kullanıcı onayı (Aşama 6'ya kadar), MCP'de yok
   sozlesmeler.py  ortak türler, durum adları, hata kodları, sayfalama
   veritabani.py   SQLite bağlantısı; yazma_islemi / okuma_islemi
   sema.py         on beş tablo (METADATA), şema sürümü denetimi ve yükseltme
