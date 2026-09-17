@@ -9,9 +9,9 @@ Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
 (veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
 işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
-sürüyor: 5.1 (zarf, hata, işlem anahtarı), 5.2/1 (nesne araçları ve
-geçici onay komutu) ve 5.2/2 (belge/hareket araçları) bitti; 5.2/3
-(durum/sorgu araçları) ve 5.3 (Cowork talimatı, gerçek ekstre) sırada. **Kararlar (2026-09-17, Abdüllatif):**
+sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2 (on üç araç: nesne,
+belge/hareket, durum/sorgu; geçici onay komutu) bitti; 5.3 (Cowork
+talimatı `docs/cowork.md`, gerçek ekstre denemesi) sırada. **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
 satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
@@ -66,8 +66,11 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Belge ve hareket araçları `belge_al`, `belge_getir`, `okuma_baslat`,
   `hareket_yaz` (paket, atomik), `okuma_tamamla`, `belge_kaydet`: bir ekstre
   MCP araçlarıyla uçtan uca işlenir; zarf her adımda `belge_kaydi` söyler
+* Durum ve sorgu araçları `islem_durumu` (talep ya da işlem anahtarıyla
+  kalıcı durum), `bekleyen_isler`, `sorgu` (yalnız bakiye ve hareketler;
+  serbest SQL yok)
 
-Henüz yok: durum/sorgu araçları (5.2/3), Cowork talimatı (5.3), diğer işlem
+Henüz yok: Cowork talimatı ve gerçek ekstre denemesi (5.3), diğer işlem
 sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7), GUI.
 
 ## Kurulum
@@ -130,8 +133,8 @@ Araçlar (`YETENEKLER`, kayıt sırasıyla): `sistem_durumu` (uygulama
 sürümü, ortam, şema sürümü `0001`, yetenek listesi, talimat sürümü; yol ya
 da sır içermez), `nesne_tanimla` (FORM/GONDER, 5.1), `nesne_bul`,
 `nesne_getir`, `oturum_baglami` (5.2/1), `belge_al`, `belge_getir`,
-`okuma_baslat`, `hareket_yaz`, `okuma_tamamla`, `belge_kaydet` (5.2/2).
-Durum/sorgu araçları 5.2/3'te.
+`okuma_baslat`, `hareket_yaz`, `okuma_tamamla`, `belge_kaydet` (5.2/2),
+`islem_durumu`, `bekleyen_isler`, `sorgu` (5.2/3). Toplam on dört araç.
 Aşama 3'ün geçici deneme araçları kaldırıldı; ne ölçtükleri "Cowork
 entegrasyonu" bölümünde. Gelen dizini ayarı (`DEFTERIKI_GELEN_DIZINI`)
 kaldı: belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapılır.
@@ -274,6 +277,34 @@ okumaya paket yazılmaz; belge_kaydet HAZIR belgeyi kaydeder, eski sürüm
 reddedilir; izinsiz yol ve anahtarsız belge_al; BELGE_YOK ve ARSIV_EKSIK;
 sunucu üzerinden araç listesi, `tutar_kurus` şeması `integer`, uçtan uca
 JSON çağrıları.
+
+### Durum ve sorgu araçları (Teslim 5.2/3)
+
+* `islem_durumu`: ya `talep_id` ya `arac_adi + islem_anahtari` (ikisi
+  birden ya da hiçbiri `GIRDI_GECERSIZ`). Talep sorgusu: talebin durumu
+  (BEKLIYOR → zarf BEKLIYOR, ONAYLANDI → TAMAMLANDI, REDDEDILDI →
+  REDDEDILDI, hata yok), kararı, hedef nesnenin güncel durumu, sürümü ve
+  özellikleri; `sonraki_adim` nesne durumuna göre. Anahtar sorgusu
+  (`islem_anahtarlari.anahtar_kayitlarini_getir`): birebir eşleşen kayıt ve
+  paket türevleri (`<anahtar>#<sıra>`) saklı sonuçlarıyla; kayıt yoksa "bu
+  anahtar hiç kullanılmamış; isteği aynı anahtarla gönder". Kesintide Cowork
+  yeniden göndermeden önce bunu sorar (K08, Aşama 3.4 davranışı).
+* `bekleyen_isler(sayfa_siniri, sayfa_baslangici)`: BEKLIYOR talepler ve
+  hedef nesneleri özellikleriyle; zarf `bekleyen` sayısı.
+* `sorgu(rapor, nesne_id, eksen, para_birimi, tarih, baslangic, bitis,
+  sayfa)`: `rapor` yalnız `bakiye` ya da `hareketler` (şema `Literal`; başka
+  değer şema reddi, metin zarfa girmez). `bakiye` →
+  `hesaplamalar.etkin_bakiye` (yalnız KAYITLI belgeler; `bekleyen_kayit_sayisi`
+  ayrıca, zarf `bekleyen`); `hareketler` → `hesaplamalar.hareketleri_listele`
+  (kayıtlı bayrağı, tarih filtresi, sayfalı). Olmayan nesne
+  `HEDEF_BULUNAMADI`; tarih biçimi `finansal_kurallar.tarih_dogrula`.
+
+Test (`tests/test_mcp_durum_araclari.py`): talep durumu bekliyor / onaylandı
+/ reddedildi ve olmayan talep; anahtar durumu saklı sonuç, kullanılmamış
+anahtar, başka araç; paket anahtarı satır kayıtlarıyla; girdi kuralı;
+bekleyen işler hedefleriyle ve sayfalı; bakiye yalnız kayıtlı belgeler
+(tarih sınırı, borç ekseni); hareketler kayıtlı bayrağı, filtre, sayfa;
+sorgu hataları; sunucu üzerinden on dört araç, serbest SQL şema reddi.
 
 Kurallar:
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,48 @@ from defteriki import sozlesmeler as sz
 
 type IstekIcerigi = Mapping[str, object]
 type Sonuc = dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class AnahtarKaydi:
+    id: int
+    arac_adi: str
+    anahtar: str
+    sonuc: Sonuc | None
+    """İş bittiyse saklı sonuç; ``None`` ise anahtar açıldı ama iş tamamlanmadı."""
+    olusturma_zamani: datetime
+
+
+def anahtar_kayitlarini_getir(
+    oturum: Session, *, arac_adi: str, anahtar: str
+) -> list[AnahtarKaydi]:
+    """Anahtarın kayıtları: birebir eşleşen ve ``<anahtar>#<n>`` türevleri.
+
+    Kesintiden sonra Cowork "bu anahtarla ne oldu?" diye sorar (K08). Paket
+    araçları satır anahtarlarını paket anahtarına ``#sıra`` ekleyerek üretir;
+    hepsi birlikte döner. Hiç kayıt yoksa iş hiç uygulanmamıştır.
+    """
+    temiz = anahtari_dogrula(anahtar)
+    onek = temiz.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "#%"
+    satirlar = oturum.execute(
+        select(sema.islem_anahtari)
+        .where(
+            sema.islem_anahtari.c.arac_adi == arac_adi,
+            (sema.islem_anahtari.c.anahtar == temiz)
+            | sema.islem_anahtari.c.anahtar.like(onek, escape="\\"),
+        )
+        .order_by(sema.islem_anahtari.c.id)
+    ).all()
+    return [
+        AnahtarKaydi(
+            id=int(s.id),
+            arac_adi=str(s.arac_adi),
+            anahtar=str(s.anahtar),
+            sonuc=dict(s.sonuc) if s.sonuc is not None else None,
+            olusturma_zamani=s.olusturma_zamani,
+        )
+        for s in satirlar
+    ]
 
 
 def istek_ozeti(icerik: IstekIcerigi) -> str:

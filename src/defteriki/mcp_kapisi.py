@@ -66,6 +66,9 @@ ARAC_OKUMA_BASLAT = "okuma_baslat"
 ARAC_HAREKET_YAZ = "hareket_yaz"
 ARAC_OKUMA_TAMAMLA = "okuma_tamamla"
 ARAC_BELGE_KAYDET = "belge_kaydet"
+ARAC_ISLEM_DURUMU = "islem_durumu"
+ARAC_BEKLEYEN_ISLER = "bekleyen_isler"
+ARAC_SORGU = "sorgu"
 SURUM_BILINMIYOR = "bilinmiyor"
 
 OLAY_MCP_BASLANGIC = "mcp_baslangic"
@@ -144,6 +147,22 @@ ARAC_BELGE_KAYDET_ACIKLAMASI = (
     "KAYITLI yapar. Gördüğün belge sürümünü ver; değiştiyse uygulanmaz."
 )
 
+ARAC_ISLEM_DURUMU_ACIKLAMASI = (
+    "Kalıcı durum sorgusu. talep_id ile: kullanıcı kararı verildi mi, hedef "
+    "nesnenin durumu ve sürümü. arac_adi + islem_anahtari ile: o anahtarla iş "
+    "uygulandı mı, saklı sonucu ne. BEKLIYOR aldıysan ya da kesinti olduysa "
+    "yeniden göndermeden önce bunu sor."
+)
+ARAC_BEKLEYEN_ISLER_ACIKLAMASI = (
+    "Kullanıcı kararı bekleyen talepler ve hedefleri; sayfalı. Bunları yeniden "
+    "önerme, onay üretme."
+)
+ARAC_SORGU_ACIKLAMASI = (
+    "İzinli raporlar: bakiye (yalnız KAYITLI belgelere dayanan etkin bakiye; "
+    "bekleyen kayıt sayısı ayrıca) ve hareketler (kayıtlı bayrağıyla, tarih "
+    "filtreli, sayfalı). Serbest SQL yok."
+)
+
 type AracGovdesi[G] = Callable[[mcp_araclari.AracBaglami, G, str], zarf.Zarf]
 
 
@@ -173,6 +192,9 @@ YETENEKLER: tuple[str, ...] = (
     ARAC_HAREKET_YAZ,
     ARAC_OKUMA_TAMAMLA,
     ARAC_BELGE_KAYDET,
+    ARAC_ISLEM_DURUMU,
+    ARAC_BEKLEYEN_ISLER,
+    ARAC_SORGU,
 )
 """Araç adları, kayıt sırasıyla; ``tools/list`` aynı sırayı verir."""
 
@@ -409,6 +431,35 @@ def sunucu_kur(
         return araci_calistir(
             ARAC_BELGE_KAYDET, mcp_araclari.belge_kaydet, baglam_, girdi
         )
+
+    @sunucu.tool(name=ARAC_ISLEM_DURUMU, description=ARAC_ISLEM_DURUMU_ACIKLAMASI)
+    def islem_durumu_araci(
+        girdi: mcp_araclari.IslemDurumuGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_ISLEM_DURUMU, mcp_araclari.islem_durumu, baglam_, girdi
+        )
+
+    @sunucu.tool(name=ARAC_BEKLEYEN_ISLER, description=ARAC_BEKLEYEN_ISLER_ACIKLAMASI)
+    def bekleyen_isler_araci(
+        baglam: Context[Any, Any],
+        girdi: mcp_araclari.BekleyenIslerGirdisi | None = None,
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_BEKLEYEN_ISLER,
+            mcp_araclari.bekleyen_isler,
+            baglam_,
+            girdi or mcp_araclari.BekleyenIslerGirdisi(),
+        )
+
+    @sunucu.tool(name=ARAC_SORGU, description=ARAC_SORGU_ACIKLAMASI)
+    def sorgu_araci(
+        girdi: mcp_araclari.SorguGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(ARAC_SORGU, mcp_araclari.sorgu, baglam_, girdi)
 
     return sunucu
 

@@ -17,7 +17,10 @@ Araçlar: 5.1 ``nesne_tanimla`` (FORM / GONDER); 5.2/1 ``nesne_bul``,
 ``belge_getir``, ``okuma_baslat``, ``hareket_yaz`` (yalnız HESAP_HAREKETI,
 paket hâlinde; K07 paket atomik), ``okuma_tamamla`` (uygulama belge kaydını
 tanımlar, C07), ``belge_kaydet``. Zarfın ``belge_kaydi`` alanı her belge
-aracında "yazıldı ama kayıtlı değil" ayrımını taşır (K19).
+aracında "yazıldı ama kayıtlı değil" ayrımını taşır (K19). 5.2/3
+``islem_durumu`` (talep ya da işlem anahtarıyla kalıcı durum; kesintide önce
+bu sorulur), ``bekleyen_isler``, ``sorgu`` (yalnız ``bakiye`` ve
+``hareketler`` raporları; serbest SQL yok).
 """
 
 from __future__ import annotations
@@ -27,8 +30,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from defteriki import belgeler, kayitlar, nesneler, onaylar, zarf
+from defteriki import belgeler, islem_anahtarlari, kayitlar, nesneler, onaylar, zarf
 from defteriki import finansal_kurallar as fk
+from defteriki import hesaplamalar as hs
 from defteriki import sozlesmeler as sz
 from defteriki.ayarlar import Ayarlar
 from defteriki.veritabani import Veritabani
@@ -581,6 +585,263 @@ def belge_kaydet(
             else None
         )
     return _kayitli_zarf(belge, okuma, islem_kimligi)
+
+
+# --- durum ve sorgu araçları ----------------------------------------------------------
+
+
+class IslemDurumuGirdisi(BaseModel):
+    """Ya onay talebi kimliği ya da (araç adı + işlem anahtarı); ikisi birden değil."""
+
+    model_config = ConfigDict(frozen=True)
+
+    talep_id: int | None = Field(default=None, strict=True, gt=0)
+    arac_adi: str | None = Field(
+        default=None,
+        description="Sorulan anahtarın kullanıldığı araç (hareket_yaz ...).",
+    )
+    islem_anahtari: str | None = None
+
+
+class BekleyenIslerGirdisi(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sayfa_siniri: int = Field(default=sz.VARSAYILAN_SAYFA_BOYUTU, strict=True)
+    sayfa_baslangici: int = Field(default=0, strict=True)
+
+
+class SorguGirdisi(BaseModel):
+    """İzinli raporlar: bakiye, hareketler. Serbest SQL yok."""
+
+    model_config = ConfigDict(frozen=True)
+
+    rapor: Literal["bakiye", "hareketler"]
+    nesne_id: int = Field(strict=True, gt=0)
+    eksen: sz.Eksen = sz.Eksen.VARLIK
+    para_birimi: sz.ParaBirimi = sz.ParaBirimi.TRY
+    tarih: str | None = Field(default=None, description="bakiye: bu tarih dahil sınır.")
+    baslangic: str | None = Field(
+        default=None, description="hareketler: ilk gün dahil."
+    )
+    bitis: str | None = Field(default=None, description="hareketler: son gün dahil.")
+    sayfa_siniri: int = Field(default=sz.VARSAYILAN_SAYFA_BOYUTU, strict=True)
+    sayfa_baslangici: int = Field(default=0, strict=True)
+
+
+def islem_durumu(
+    baglam: AracBaglami, girdi: IslemDurumuGirdisi, islem_kimligi: str
+) -> zarf.Zarf:
+    """Kalıcı durum: talep (karar verildi mi) ya da anahtar (iş uygulandı mı)."""
+    talep_soruldu = girdi.talep_id is not None
+    anahtar_soruldu = girdi.islem_anahtari is not None or girdi.arac_adi is not None
+    if talep_soruldu == anahtar_soruldu:
+        raise sz.GirdiGecersiz(
+            "ya talep_id ya da arac_adi + islem_anahtari ver; ikisi birden değil",
+            alan="talep_id",
+        )
+    if talep_soruldu:
+        assert girdi.talep_id is not None
+        return _talep_durumu(baglam, girdi.talep_id, islem_kimligi)
+    if girdi.arac_adi is None or girdi.islem_anahtari is None:
+        raise sz.GirdiGecersiz(
+            "anahtar sorgusu için arac_adi ve islem_anahtari birlikte gerekli",
+            alan="islem_anahtari",
+        )
+    with baglam.veritabani.okuma_islemi() as oturum:
+        kayitlar_ = islem_anahtarlari.anahtar_kayitlarini_getir(
+            oturum, arac_adi=girdi.arac_adi, anahtar=girdi.islem_anahtari
+        )
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        icerik={
+            "kayitlar": [
+                {
+                    "anahtar": k.anahtar,
+                    "sonuc": k.sonuc,
+                    "olusturma_zamani": k.olusturma_zamani.isoformat(),
+                }
+                for k in kayitlar_
+            ]
+        },
+        sonraki_adim=(
+            "İş daha önce uygulanmış; saklı sonucu kullan, isteği yeniden gönderme."
+            if kayitlar_
+            else "Bu anahtar hiç kullanılmamış; isteği aynı anahtarla gönder."
+        ),
+    )
+
+
+def _talep_durumu(baglam: AracBaglami, talep_id: int, islem_kimligi: str) -> zarf.Zarf:
+    with baglam.veritabani.okuma_islemi() as oturum:
+        talep = onaylar.talep_getir(oturum, talep_id)
+        hedef = (
+            nesneler.nesne_getir(oturum, talep.hedef_id)
+            if talep.tur is sz.OnayTuru.NESNE_ACILISI
+            else None
+        )
+    durum = {
+        sz.OnayDurumu.BEKLIYOR: zarf.YanitDurumu.BEKLIYOR,
+        sz.OnayDurumu.ONAYLANDI: zarf.YanitDurumu.TAMAMLANDI,
+        sz.OnayDurumu.REDDEDILDI: zarf.YanitDurumu.REDDEDILDI,
+    }[talep.durum]
+    return zarf.Zarf(
+        durum=durum,
+        islem_kimligi=islem_kimligi,
+        talep_id=talep.id,
+        nesne_id=hedef.nesne.id if hedef else None,
+        hedef_surumu=hedef.nesne.surum if hedef else talep.hedef_surumu,
+        bekleyen=1 if talep.durum is sz.OnayDurumu.BEKLIYOR else 0,
+        icerik={
+            "talep": _talep_ozeti(talep),
+            "hedef": _nesne_ozeti(hedef.nesne, hedef.ozellikler) if hedef else None,
+        },
+        sonraki_adim=(
+            _nesne_sonraki_adimi(hedef.nesne.durum)
+            if hedef
+            else "Talep sonucunu kullan."
+        ),
+    )
+
+
+def bekleyen_isler(
+    baglam: AracBaglami, girdi: BekleyenIslerGirdisi, islem_kimligi: str
+) -> zarf.Zarf:
+    """Kullanıcı kararı bekleyen talepler, hedefleriyle; sayfalı."""
+    sayfalama = sz.Sayfalama(girdi.sayfa_siniri, girdi.sayfa_baslangici)
+    with baglam.veritabani.okuma_islemi() as oturum:
+        talepler = onaylar.bekleyenleri_listele(oturum, sayfalama=sayfalama)
+        hedefler = nesneler.ozellikleri_getir(
+            oturum,
+            [t.hedef_id for t in talepler if t.tur is sz.OnayTuru.NESNE_ACILISI],
+        )
+        nesneler_ = {
+            t.hedef_id: nesneler.nesne_getir(oturum, t.hedef_id).nesne
+            for t in talepler
+            if t.tur is sz.OnayTuru.NESNE_ACILISI
+        }
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        bekleyen=len(talepler),
+        icerik={
+            "talepler": [
+                {
+                    **_talep_ozeti(t),
+                    "hedef": (
+                        _nesne_ozeti(
+                            nesneler_[t.hedef_id], hedefler.get(t.hedef_id, ())
+                        )
+                        if t.hedef_id in nesneler_
+                        else None
+                    ),
+                }
+                for t in talepler
+            ],
+            "sayfa": {
+                "sinir": sayfalama.sinir,
+                "baslangic": sayfalama.baslangic,
+                "donen": len(talepler),
+            },
+        },
+        sonraki_adim=(
+            "Bunlar kullanıcı kararı bekliyor; yeniden önerme, onay üretme."
+            if talepler
+            else "Bekleyen iş yok."
+        ),
+    )
+
+
+def sorgu(baglam: AracBaglami, girdi: SorguGirdisi, islem_kimligi: str) -> zarf.Zarf:
+    """``bakiye``: etkin bakiye (yalnız KAYITLI belge); ``hareketler``: kayıtlı
+    bayrağıyla."""
+    sayfalama = sz.Sayfalama(girdi.sayfa_siniri, girdi.sayfa_baslangici)
+    tarih = fk.tarih_dogrula(girdi.tarih, alan="tarih") if girdi.tarih else None
+    baslangic = (
+        fk.tarih_dogrula(girdi.baslangic, alan="baslangic") if girdi.baslangic else None
+    )
+    bitis = fk.tarih_dogrula(girdi.bitis, alan="bitis") if girdi.bitis else None
+    with baglam.veritabani.okuma_islemi() as oturum:
+        nesne = nesneler.nesne_getir(oturum, girdi.nesne_id).nesne
+        if girdi.rapor == "bakiye":
+            b = hs.etkin_bakiye(
+                oturum,
+                nesne_id=nesne.id,
+                eksen=girdi.eksen,
+                para_birimi=girdi.para_birimi,
+                tarih=tarih,
+            )
+            icerik: dict[str, Any] = {
+                "bakiye": {
+                    "nesne_id": b.nesne_id,
+                    "eksen": b.eksen.value,
+                    "para_birimi": b.para_birimi.value,
+                    "tarih": b.tarih.isoformat() if b.tarih else None,
+                    "arttir_kurus": b.arttir_kurus,
+                    "azalt_kurus": b.azalt_kurus,
+                    "bakiye_kurus": b.bakiye_kurus,
+                    "bekleyen_kayit_sayisi": b.bekleyen_kayit_sayisi,
+                }
+            }
+            bekleyen = b.bekleyen_kayit_sayisi
+        else:
+            hareketler = hs.hareketleri_listele(
+                oturum,
+                nesne_id=nesne.id,
+                eksen=girdi.eksen,
+                baslangic=baslangic,
+                bitis=bitis,
+                sayfalama=sayfalama,
+            )
+            icerik = {
+                "hareketler": [
+                    {
+                        "kayit_id": h.kayit_id,
+                        "etki_id": h.etki_id,
+                        "islem_tarihi": h.islem_tarihi.isoformat(),
+                        "valor_tarihi": (
+                            h.valor_tarihi.isoformat() if h.valor_tarihi else None
+                        ),
+                        "aciklama": h.aciklama,
+                        "yon": h.yon.value,
+                        "tutar_kurus": h.tutar_kurus,
+                        "para_birimi": h.para_birimi.value,
+                        "kayitli": h.kayitli,
+                    }
+                    for h in hareketler
+                ],
+                "sayfa": {
+                    "sinir": sayfalama.sinir,
+                    "baslangic": sayfalama.baslangic,
+                    "donen": len(hareketler),
+                },
+            }
+            bekleyen = sum(1 for h in hareketler if not h.kayitli)
+    return zarf.Zarf(
+        durum=zarf.YanitDurumu.TAMAMLANDI,
+        islem_kimligi=islem_kimligi,
+        nesne_id=nesne.id,
+        bekleyen=bekleyen,
+        icerik=icerik,
+        sonraki_adim=(
+            "Bakiye yalnız KAYITLI belgelere dayanır; bekleyen kayıtlar toplamda yok."
+            if bekleyen
+            else "Rapor tamam."
+        ),
+    )
+
+
+def _talep_ozeti(talep: onaylar.OnayTalebi) -> dict[str, Any]:
+    return {
+        "id": talep.id,
+        "tur": talep.tur.value,
+        "durum": talep.durum.value,
+        "hedef_id": talep.hedef_id,
+        "hedef_surumu": talep.hedef_surumu,
+        "karar": talep.karar,
+        "olusturma_zamani": talep.olusturma_zamani.isoformat(),
+        "cozum_zamani": talep.cozum_zamani.isoformat() if talep.cozum_zamani else None,
+    }
 
 
 # --- yardımcılar ----------------------------------------------------------------------
