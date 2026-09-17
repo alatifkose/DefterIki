@@ -60,6 +60,12 @@ ARAC_NESNE_TANIMLA = "nesne_tanimla"
 ARAC_NESNE_BUL = "nesne_bul"
 ARAC_NESNE_GETIR = "nesne_getir"
 ARAC_OTURUM_BAGLAMI = "oturum_baglami"
+ARAC_BELGE_AL = "belge_al"
+ARAC_BELGE_GETIR = "belge_getir"
+ARAC_OKUMA_BASLAT = "okuma_baslat"
+ARAC_HAREKET_YAZ = "hareket_yaz"
+ARAC_OKUMA_TAMAMLA = "okuma_tamamla"
+ARAC_BELGE_KAYDET = "belge_kaydet"
 SURUM_BILINMIYOR = "bilinmiyor"
 
 OLAY_MCP_BASLANGIC = "mcp_baslangic"
@@ -105,7 +111,40 @@ ARAC_OTURUM_BAGLAMI_ACIKLAMASI = (
     "bildiğin kimliği doğrudan kullan, alan adlarını aynen kullan."
 )
 
-type AracGovdesi[G] = Callable[[Veritabani, G, str], zarf.Zarf]
+ARAC_BELGE_AL_ACIKLAMASI = (
+    "Gelen dizinine bıraktığın dosyayı arşivler ve belge olarak tanıtır. Aynı "
+    "içerik ikinci kez gelirse mevcut belge döner, ikinci belge açılmaz. Belge "
+    "arşivlenmeden hiçbir finansal satır yazılamaz."
+)
+ARAC_BELGE_GETIR_ACIKLAMASI = (
+    "Belgenin durumu, arşiv dosyası bilgisi ve okuma sürümleri; belge_kaydi "
+    "KAYITLI mı söyler."
+)
+ARAC_OKUMA_BASLAT_ACIKLAMASI = (
+    "ARSIVLENDI belgede okumayı açar; belge OKUNUYOR olur. Belge düzeyi bilgi "
+    "ve tamlık (beklenen satır sayısı, açılış/kapanış bakiyesi) verilebilir; "
+    "verilmeyen alan bilinmiyor sayılır, 'belgenin tamamı okundu' iddiası "
+    "üretilmez."
+)
+ARAC_HAREKET_YAZ_ACIKLAMASI = (
+    "Açık okumaya bir paket satır ve HESAP_HAREKETI yazar (tek nesne, VARLIK "
+    "ARTTIR/AZALT, kuruş tam sayı, işlem tarihi). Paket ya bütünüyle yazılır ya "
+    "hiç; tek satırdaki hata paketin tamamını düşürür, konum satırı söyler. Aynı "
+    "paket anahtarı yeniden gelirse ikinci kez yazılmaz. Yazmak kayıt etmek "
+    "değildir: belge KAYITLI olana kadar hesaba girmez."
+)
+ARAC_OKUMA_TAMAMLA_ACIKLAMASI = (
+    "Bütün satırlar gönderildikten sonra çağır. Uygulama koşulları denetler "
+    "(her satır sonuçlanmış, satır sayısı tamlıkla aynı) ve belge kaydını "
+    "kendisi tanımlar: belge KAYITLI. Koşul sağlanmazsa hiçbir durum değişmez; "
+    "hatadaki yönergeyi uygula ve yeniden tamamla."
+)
+ARAC_BELGE_KAYDET_ACIKLAMASI = (
+    "HAZIR durumda kalmış belgeyi (karar sonrası) koşulları yeniden denetleyerek "
+    "KAYITLI yapar. Gördüğün belge sürümünü ver; değiştiyse uygulanmaz."
+)
+
+type AracGovdesi[G] = Callable[[mcp_araclari.AracBaglami, G, str], zarf.Zarf]
 
 
 @dataclass(frozen=True)
@@ -128,6 +167,12 @@ YETENEKLER: tuple[str, ...] = (
     ARAC_NESNE_BUL,
     ARAC_NESNE_GETIR,
     ARAC_OTURUM_BAGLAMI,
+    ARAC_BELGE_AL,
+    ARAC_BELGE_GETIR,
+    ARAC_OKUMA_BASLAT,
+    ARAC_HAREKET_YAZ,
+    ARAC_OKUMA_TAMAMLA,
+    ARAC_BELGE_KAYDET,
 )
 """Araç adları, kayıt sırasıyla; ``tools/list`` aynı sırayı verir."""
 
@@ -188,7 +233,7 @@ def el_sikisma_ozeti(baglam: Context[Any, Any]) -> str:
 
 
 def araci_calistir[G](
-    arac_adi: str, govde: AracGovdesi[G], veritabani: Veritabani, girdi: G
+    arac_adi: str, govde: AracGovdesi[G], baglam: mcp_araclari.AracBaglami, girdi: G
 ) -> zarf.Zarf:
     """Araç gövdesini korelasyon kimliğiyle çalıştırır; her sonucu zarfa çevirir.
 
@@ -197,7 +242,7 @@ def araci_calistir[G](
     """
     islem_kimligi = zarf.islem_kimligi_uret()
     try:
-        sonuc = govde(veritabani, girdi, islem_kimligi)
+        sonuc = govde(baglam, girdi, islem_kimligi)
     except sz.DefterikiHatasi as hata:
         sonuc = zarf.hata_zarfi(hata, islem_kimligi)
     except Exception as hata:
@@ -268,6 +313,7 @@ def sunucu_kur(
         version=uygulama_surumu(),
         instructions=SUNUCU_TALIMATI,
     )
+    baglam_ = mcp_araclari.AracBaglami(veritabani, ayarlar)
 
     @sunucu.tool(name=ARAC_SISTEM_DURUMU, description=ARAC_SISTEM_DURUMU_ACIKLAMASI)
     def sistem_durumu_araci(baglam: Context[Any, Any]) -> SistemDurumu:
@@ -280,7 +326,7 @@ def sunucu_kur(
     ) -> zarf.Zarf:
         el_sikismasini_kaydet(baglam)
         return araci_calistir(
-            ARAC_NESNE_TANIMLA, mcp_araclari.nesne_tanimla, veritabani, girdi
+            ARAC_NESNE_TANIMLA, mcp_araclari.nesne_tanimla, baglam_, girdi
         )
 
     @sunucu.tool(name=ARAC_NESNE_BUL, description=ARAC_NESNE_BUL_ACIKLAMASI)
@@ -288,7 +334,7 @@ def sunucu_kur(
         girdi: mcp_araclari.NesneBulGirdisi, baglam: Context[Any, Any]
     ) -> zarf.Zarf:
         el_sikismasini_kaydet(baglam)
-        return araci_calistir(ARAC_NESNE_BUL, mcp_araclari.nesne_bul, veritabani, girdi)
+        return araci_calistir(ARAC_NESNE_BUL, mcp_araclari.nesne_bul, baglam_, girdi)
 
     @sunucu.tool(name=ARAC_NESNE_GETIR, description=ARAC_NESNE_GETIR_ACIKLAMASI)
     def nesne_getir_araci(
@@ -296,7 +342,7 @@ def sunucu_kur(
     ) -> zarf.Zarf:
         el_sikismasini_kaydet(baglam)
         return araci_calistir(
-            ARAC_NESNE_GETIR, mcp_araclari.nesne_getir, veritabani, girdi
+            ARAC_NESNE_GETIR, mcp_araclari.nesne_getir, baglam_, girdi
         )
 
     @sunucu.tool(name=ARAC_OTURUM_BAGLAMI, description=ARAC_OTURUM_BAGLAMI_ACIKLAMASI)
@@ -308,8 +354,60 @@ def sunucu_kur(
         return araci_calistir(
             ARAC_OTURUM_BAGLAMI,
             mcp_araclari.oturum_baglami,
-            veritabani,
+            baglam_,
             girdi or mcp_araclari.OturumBaglamiGirdisi(),
+        )
+
+    @sunucu.tool(name=ARAC_BELGE_AL, description=ARAC_BELGE_AL_ACIKLAMASI)
+    def belge_al_araci(
+        girdi: mcp_araclari.BelgeAlGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(ARAC_BELGE_AL, mcp_araclari.belge_al, baglam_, girdi)
+
+    @sunucu.tool(name=ARAC_BELGE_GETIR, description=ARAC_BELGE_GETIR_ACIKLAMASI)
+    def belge_getir_araci(
+        girdi: mcp_araclari.BelgeGetirGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_BELGE_GETIR, mcp_araclari.belge_getir, baglam_, girdi
+        )
+
+    @sunucu.tool(name=ARAC_OKUMA_BASLAT, description=ARAC_OKUMA_BASLAT_ACIKLAMASI)
+    def okuma_baslat_araci(
+        girdi: mcp_araclari.OkumaBaslatGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_OKUMA_BASLAT, mcp_araclari.okuma_baslat, baglam_, girdi
+        )
+
+    @sunucu.tool(name=ARAC_HAREKET_YAZ, description=ARAC_HAREKET_YAZ_ACIKLAMASI)
+    def hareket_yaz_araci(
+        girdi: mcp_araclari.HareketYazGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_HAREKET_YAZ, mcp_araclari.hareket_yaz, baglam_, girdi
+        )
+
+    @sunucu.tool(name=ARAC_OKUMA_TAMAMLA, description=ARAC_OKUMA_TAMAMLA_ACIKLAMASI)
+    def okuma_tamamla_araci(
+        girdi: mcp_araclari.OkumaTamamlaGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_OKUMA_TAMAMLA, mcp_araclari.okuma_tamamla, baglam_, girdi
+        )
+
+    @sunucu.tool(name=ARAC_BELGE_KAYDET, description=ARAC_BELGE_KAYDET_ACIKLAMASI)
+    def belge_kaydet_araci(
+        girdi: mcp_araclari.BelgeKaydetGirdisi, baglam: Context[Any, Any]
+    ) -> zarf.Zarf:
+        el_sikismasini_kaydet(baglam)
+        return araci_calistir(
+            ARAC_BELGE_KAYDET, mcp_araclari.belge_kaydet, baglam_, girdi
         )
 
     return sunucu

@@ -59,8 +59,16 @@ def _log(ayarlar: ay.Ayarlar) -> str:
     return (ayarlar.log_dizini / gunluk.GUNLUK_DOSYA_ADI).read_text(encoding="utf-8")
 
 
+def _baglam(db: vt.Veritabani) -> mcp_araclari.AracBaglami:
+    """Nesne araçları yalnız veritabanını kullanır; ayarlar ortamdan (test kökü)."""
+    return mcp_araclari.AracBaglami(db, ay.ayarlari_yukle())
+
+
 def _gonder(
-    db: vt.Veritabani, anahtar: str | None, *ozellikler: Oz, ustler: list[int] = []
+    db: vt.Veritabani,
+    anahtar: str | None,
+    *ozellikler: Oz,
+    ustler: list[int] = [],
 ) -> zarf.Zarf:
     girdi = Girdi(
         adim="GONDER",
@@ -69,7 +77,7 @@ def _gonder(
         ust_idleri=ustler,
     )
     return mcp_kapisi.araci_calistir(
-        mcp_kapisi.ARAC_NESNE_TANIMLA, mcp_araclari.nesne_tanimla, db, girdi
+        mcp_kapisi.ARAC_NESNE_TANIMLA, mcp_araclari.nesne_tanimla, _baglam(db), girdi
     )
 
 
@@ -87,7 +95,7 @@ def test_form_zarfi_veritabanina_dokunmaz(
     sonuc = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_NESNE_TANIMLA,
         mcp_araclari.nesne_tanimla,
-        db,
+        _baglam(db),
         Girdi(adim="FORM"),
     )
 
@@ -163,7 +171,7 @@ def test_urun_hatasi_kodu_ve_alaniyla_zarfa_girer(
     assert sonuc.durum is zarf.YanitDurumu.REDDEDILDI
     assert sonuc.hata is not None
     assert (sonuc.hata.kod, sonuc.hata.alan) == ("HEDEF_BULUNAMADI", "ust_idleri")
-    assert sonuc.sonraki_adim == "Hatayı gider; değişiklik yapılmadı."
+    assert sonuc.sonraki_adim == zarf.SONRAKI_ADIMLAR["HEDEF_BULUNAMADI"]
     assert _sayi(db, sema.nesne) == 0 and _sayi(db, sema.islem_anahtari) == 0
 
 

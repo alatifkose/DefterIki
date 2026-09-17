@@ -9,8 +9,8 @@ Aşama 2 (proje temeli) ve Aşama 3 (gerçek Cowork MCP denemesi) tamamlandı;
 Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. Aşama 4
 (veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
 işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
-sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2/1 (nesne araçları ve
-geçici onay komutu) bitti; 5.2/2 (belge/hareket araçları), 5.2/3
+sürüyor: 5.1 (zarf, hata, işlem anahtarı), 5.2/1 (nesne araçları ve
+geçici onay komutu) ve 5.2/2 (belge/hareket araçları) bitti; 5.2/3
 (durum/sorgu araçları) ve 5.3 (Cowork talimatı, gerçek ekstre) sırada. **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
@@ -63,9 +63,11 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Nesne araçları `nesne_bul`, `nesne_getir`, `oturum_baglami` (C16) ve
   geçici kullanıcı onayı komutu `uv run defteriki-onay` (`onay_komutu.py`;
   MCP'ye açık değil)
+* Belge ve hareket araçları `belge_al`, `belge_getir`, `okuma_baslat`,
+  `hareket_yaz` (paket, atomik), `okuma_tamamla`, `belge_kaydet`: bir ekstre
+  MCP araçlarıyla uçtan uca işlenir; zarf her adımda `belge_kaydi` söyler
 
-Henüz yok: belge/hareket ve durum/sorgu araçları (5.2/2, 5.2/3), Cowork
-talimatı (5.3), diğer işlem
+Henüz yok: durum/sorgu araçları (5.2/3), Cowork talimatı (5.3), diğer işlem
 sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7), GUI.
 
 ## Kurulum
@@ -127,8 +129,9 @@ kapatınca `0` ile çıkar. Hazırlık düşerse hata stderr'e yazılır, çık�
 Araçlar (`YETENEKLER`, kayıt sırasıyla): `sistem_durumu` (uygulama
 sürümü, ortam, şema sürümü `0001`, yetenek listesi, talimat sürümü; yol ya
 da sır içermez), `nesne_tanimla` (FORM/GONDER, 5.1), `nesne_bul`,
-`nesne_getir`, `oturum_baglami` (5.2/1). Belge/hareket ve durum/sorgu
-araçları 5.2/2 ve 5.2/3'te.
+`nesne_getir`, `oturum_baglami` (5.2/1), `belge_al`, `belge_getir`,
+`okuma_baslat`, `hareket_yaz`, `okuma_tamamla`, `belge_kaydet` (5.2/2).
+Durum/sorgu araçları 5.2/3'te.
 Aşama 3'ün geçici deneme araçları kaldırıldı; ne ölçtükleri "Cowork
 entegrasyonu" bölümünde. Gelen dizini ayarı (`DEFTERIKI_GELEN_DIZINI`)
 kaldı: belge alımı Cowork'un bu dizine bıraktığı dosyanın yoluyla yapılır.
@@ -146,7 +149,10 @@ satırıyla eşleşir); `talimat_surumu` (`docs/cowork.md`, şimdilik `0.1`);
 **"Başarılı" tek başına "kayıtlı" demek değildir**; `belge_kaydi` KAYITLI
 olmadan yazılanlar hesaba girmez (K19).
 
-Hata çevirisi (`mcp_kapisi.araci_calistir`): ürün hatası kodlu REDDEDILDI;
+Hata çevirisi (`mcp_kapisi.araci_calistir`): ürün hatası kodlu REDDEDILDI,
+`sonraki_adim` Tam Plan 11.2 tablosundan koda göre (`zarf.SONRAKI_ADIMLAR`:
+"Kaynağı tamamla", "yuvarlama ya da kur uydurma", "eksik satırı çöz, sonra
+yeniden tamamla" ...);
 `VERITABANI_MESGUL` YENIDEN_DENE ("aynı anahtarla tekrar dene, yeni anahtar
 üretme"); beklenmeyen hata `BEKLENMEYEN_HATA` (mesaj zarfa girmez, türü
 günlüğe, korelasyon kimliğiyle). SDK'nın kendi girdi doğrulama hatası
@@ -222,6 +228,52 @@ iş); sunucu üzerinden dört araç ve şema reddi.
 Test (`tests/test_onay_komutu.py`): bekleyenler ve göster; şart seçerek
 onay (nesne AKTIF, sürüm 2, şart kalıcı); red (SILINDI); eski sürüm, olmayan
 talep ve yabancı şart uygulanmaz; onay komutu MCP yeteneklerinde yok.
+
+### Belge ve hareket araçları (Teslim 5.2/2)
+
+Araç gövdeleri `AracBaglami(veritabani, ayarlar)` alır; belge araçları
+gelen ve belge dizinini ayarlardan okur. Her araç zarfta `belge_id`,
+`okuma_id`, `hedef_surumu` (belge sürümü) ve `belge_kaydi` taşır; "yazıldı
+ama kayıtlı değil" her adımda görünür (K19).
+
+* `belge_al(yol, islem_anahtari)`: `belgeler.belge_al` (arşiv, sonra kısa
+  yazma işlemi). Yeni belge `yazilan=1`, aynı içerik `zaten_mevcut=1` ve
+  mevcut belgenin durumu; `sonraki_adim` belge durumuna göre (ARSIVLENDI →
+  "okuma_baslat ile aç", KAYITLI → "aynı belgeyi yeniden işleme"). İzinsiz
+  yol `GIRDI_GECERSIZ` (alan `yol`, mesajda yol yok).
+* `belge_getir(belge_id)`: belge, dosya (sha256, boyut, mime, uzantı, kaynak
+  adı), okuma sürümleri; `okuma_id` = etkin okuma.
+* `okuma_baslat(belge_id, islem_anahtari, talimat_surumu, icerik, tamlik)`:
+  `talimat_surumu` (varsayılan zarfınki) okumanın `sema_surumu` alanına
+  yazılır; `tamlik` beklenen satır sayısı ve bakiye alanları. `BELGE_YOK`,
+  `ARSIV_EKSIK` (S10) kodlu ret.
+* `hareket_yaz(okuma_id, islem_anahtari, hareketler[1..500])`: her öğe
+  `satir` (satır anahtarı, konum, ham) + `hareket` (HESAP_HAREKETI: nesne,
+  yön, kuruş tutar, işlem tarihi, valör, açıklama, para birimi). Paket tek
+  yazma işlemi: her satır için `kayitlar.hareket_yaz`, satır anahtarı
+  `<paket anahtarı>#<sıra>`; aynı paket yeniden gelirse hiçbiri yazılmaz
+  (`zaten_mevcut`), içerik değiştiyse `ANAHTAR_ICERIK_CAKISMASI`. Bir
+  satırdaki hata paketin tamamını düşürür, `hata.konum` paketteki sırayı
+  söyler (K07/S11). `tutar_kurus` şemada `integer` görünür ama doğrulama
+  `finansal_kurallar`da yapılır: `12.5` `TUTAR_GECERSIZ` kodu ve "yuvarlama
+  ya da kur uydurma" yönergesiyle döner (S20).
+* `okuma_tamamla(okuma_id, islem_anahtari, tamlik)`: `belgeler.okuma_tamamla`;
+  koşullar sağlanırsa belge `KAYITLI`, zarf `belge_kaydi=KAYITLI`;
+  `MUTABAKAT_FARKI` / `BELGE_HAZIR_DEGIL` ret, hiçbir durum değişmez,
+  `sonraki_adim` "eksik satırı çöz, yeniden tamamla".
+* `belge_kaydet(belge_id, gorulen_surum, islem_anahtari)`: HAZIR belgeyi
+  kaydeder; sürüm uyuşmazsa `HEDEF_SURUMU_DEGISTI`, hazır değilse
+  `BELGE_HAZIR_DEGIL`.
+
+Test (`tests/test_mcp_belge_araclari.py`): ekstre araçlarla uçtan uca
+(belge_al → okuma_baslat → iki paket → mutabakat farkı ret → eksik satır →
+okuma_tamamla KAYITLI → bakiye → belge_getir → aynı dosya ikinci kez aynı
+belge); paketteki tek hata hepsini düşürür ve konum söyler (float tutar,
+olmayan nesne); aynı paket ikinci kez yazmaz, farklı içerik çakışır; kapalı
+okumaya paket yazılmaz; belge_kaydet HAZIR belgeyi kaydeder, eski sürüm
+reddedilir; izinsiz yol ve anahtarsız belge_al; BELGE_YOK ve ARSIV_EKSIK;
+sunucu üzerinden araç listesi, `tutar_kurus` şeması `integer`, uçtan uca
+JSON çağrıları.
 
 Kurallar:
 

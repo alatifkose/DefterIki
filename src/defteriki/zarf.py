@@ -99,6 +99,41 @@ class Zarf(BaseModel):
     hata: Hata | None = None
 
 
+SONRAKI_ADIMLAR: dict[str, str] = {
+    "BELGE_YOK": "Kaynağı tamamla (belge_al); finansal yazmayı tekrar deneme.",
+    "ARSIV_EKSIK": (
+        "Kaynağı tamamla (dosyayı yeniden al); finansal yazmayı tekrar deneme."
+    ),
+    "HEDEF_BULUNAMADI": (
+        "Yanlış kimlik bağlantısını düzelt; kimlikleri nesne_bul ya da belge_getir "
+        "ile doğrula."
+    ),
+    "SEVIYE_CAKISMASI": "Üst bağlantılarını incele; seviyeyi zorlama.",
+    "NESNE_ENGELLI": "Vakayı ve izinli işlemi izle; yeni kimlikle engeli aşma.",
+    "YENI_NESNE_ENGELI": "Şüphe çözülene kadar yeni nesne önerme; engeli aşma.",
+    "TUTAR_GECERSIZ": "Kaynağa dön; yuvarlama ya da kur uydurma.",
+    "PARA_BIRIMI_DESTEKLENMIYOR": "Kaynağa dön; kur uydurma.",
+    "ANAHTAR_ICERIK_CAKISMASI": (
+        "Eski işi sorgula; farklı içerik için yeni işlem anahtarı üret."
+    ),
+    "HEDEF_SURUMU_DEGISTI": "Güncel hedefi al; eski onayı yeni içeriğe uygulama.",
+    "BELGE_HAZIR_DEGIL": (
+        "Eksik satır ya da kararı çöz; belgeyi kayıtlı gibi raporlama."
+    ),
+    "MUTABAKAT_FARKI": (
+        "Eksik ya da fazla satırı çöz, sonra yeniden tamamla; kayıtlı gibi raporlama."
+    ),
+    "KAYNAK_CAKISMASI": (
+        "Aynı olay iddiasındaki tutar, yön, para birimi farkını incele."
+    ),
+    "VERITABANI_MESGUL": (
+        "Aynı işlem anahtarıyla kısa süre sonra tekrar dene; yeni anahtar üretme."
+    ),
+    "GIRDI_GECERSIZ": "Girdiyi düzelt; değişiklik yapılmadı.",
+}
+"""Tam Plan 11.2: hata koduna göre Cowork'un beklenen tepkisi."""
+
+
 def islem_kimligi_uret() -> str:
     return uuid.uuid4().hex[:12]
 
@@ -118,10 +153,8 @@ def hata_zarfi(hata: sz.DefterikiHatasi, islem_kimligi: str) -> Zarf:
             konum=hata.konum,
             tekrar_denenebilir=hata.tekrar_denenebilir,
         ),
-        sonraki_adim=(
-            "Aynı işlem anahtarıyla kısa süre sonra tekrar dene; yeni anahtar üretme."
-            if hata.tekrar_denenebilir
-            else "Hatayı gider; değişiklik yapılmadı."
+        sonraki_adim=SONRAKI_ADIMLAR.get(
+            hata.kod, "Hatayı gider; değişiklik yapılmadı."
         ),
     )
 

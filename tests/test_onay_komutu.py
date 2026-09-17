@@ -39,7 +39,7 @@ def bekleyen(ayarlar: ay.Ayarlar) -> int:
     db = vt.veritabani_ac(ayarlar)
     try:
         sonuc = mcp_araclari.nesne_tanimla(
-            db,
+            mcp_araclari.AracBaglami(db, ayarlar),
             mcp_araclari.NesneTanimlaGirdisi(
                 adim="GONDER",
                 islem_anahtari="q",

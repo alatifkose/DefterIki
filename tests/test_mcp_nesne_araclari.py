@@ -47,11 +47,19 @@ def ayarlar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[ay.Ayar
     gunluk.gunlugu_kapat()
 
 
+def _baglam(db: vt.Veritabani) -> mcp_araclari.AracBaglami:
+    """Nesne araçları yalnız veritabanını kullanır; ayarlar ortamdan (test kökü)."""
+    return mcp_araclari.AracBaglami(db, ay.ayarlari_yukle())
+
+
 def _gonder(
-    db: vt.Veritabani, anahtar: str, *ozellikler: Oz, ustler: list[int] = []
+    db: vt.Veritabani,
+    anahtar: str,
+    *ozellikler: Oz,
+    ustler: list[int] = [],
 ) -> int:
     sonuc = mcp_araclari.nesne_tanimla(
-        db,
+        _baglam(db),
         mcp_araclari.NesneTanimlaGirdisi(
             adim="GONDER",
             islem_anahtari=anahtar,
@@ -106,7 +114,7 @@ def _bul(db: vt.Veritabani, **alanlar: Any) -> zarf.Zarf:
     return mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_NESNE_BUL,
         mcp_araclari.nesne_bul,
-        db,
+        _baglam(db),
         mcp_araclari.NesneBulGirdisi(**alanlar),
     )
 
@@ -190,7 +198,7 @@ def test_getir_ozellik_ust_alt_ve_surum(
     sonuc = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_NESNE_GETIR,
         mcp_araclari.nesne_getir,
-        db,
+        _baglam(db),
         mcp_araclari.NesneGetirGirdisi(nesne_id=banka),
     )
     assert sonuc.durum is zarf.YanitDurumu.TAMAMLANDI
@@ -203,7 +211,7 @@ def test_getir_ozellik_ust_alt_ve_surum(
     bekleyen = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_NESNE_GETIR,
         mcp_araclari.nesne_getir,
-        db,
+        _baglam(db),
         mcp_araclari.NesneGetirGirdisi(nesne_id=gk),
     )
     assert bekleyen.sonraki_adim == mcp_araclari.SONRAKI_ONAY_BEKLE
@@ -214,7 +222,7 @@ def test_getir_olmayan_nesne(db: vt.Veritabani, ayarlar: ay.Ayarlar) -> None:
     sonuc = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_NESNE_GETIR,
         mcp_araclari.nesne_getir,
-        db,
+        _baglam(db),
         mcp_araclari.NesneGetirGirdisi(nesne_id=77),
     )
     assert sonuc.durum is zarf.YanitDurumu.REDDEDILDI
@@ -228,7 +236,7 @@ def test_oturum_baglami_bos_defter(db: vt.Veritabani, ayarlar: ay.Ayarlar) -> No
     sonuc = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_OTURUM_BAGLAMI,
         mcp_araclari.oturum_baglami,
-        db,
+        _baglam(db),
         mcp_araclari.OturumBaglamiGirdisi(),
     )
     assert sonuc.durum is zarf.YanitDurumu.TAMAMLANDI and sonuc.bekleyen == 0
@@ -242,7 +250,7 @@ def test_oturum_baglami_son_nesneler_alan_adlari_bekleyenler(
     sonuc = mcp_kapisi.araci_calistir(
         mcp_kapisi.ARAC_OTURUM_BAGLAMI,
         mcp_araclari.oturum_baglami,
-        db,
+        _baglam(db),
         mcp_araclari.OturumBaglamiGirdisi(son_nesne_sayisi=2),
     )
     assert sonuc.icerik is not None
