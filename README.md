@@ -13,8 +13,9 @@ sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2 (on üç araç: nesne,
 belge/hareket, durum/sorgu; geçici onay komutu) ve 5.3 (Cowork talimatı
 `docs/cowork.md` 0.1, gerçek ekstre denemesi başarılı, tekrar denemesi
 yazmadı) bitti; **Aşama 5 kapısı geçildi (2026-09-17)**, bulgular "Cowork
-talimatı" bölümünde (AppData yönlendirmesi ve açılış bakiyesi karar
-bekliyor). **Kararlar (2026-09-17, Abdüllatif):**
+talimatı" bölümünde. Aşama 6 (ilk pencere) sürüyor: 6.1 kabuk ve değişiklik
+izleme bitti (`uv run defteriki-arayuz`); 6.2 karar kutusu sırada.
+**Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
 satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
@@ -81,8 +82,13 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   (iki nesne onayı, altı hareket, KAYITLI, bakiye); aynı belge ikinci kez
   yazılmadı; bulgular ve açık kararlar "Cowork talimatı" bölümünde
 
-Henüz yok: devreden bakiye kararı, diğer işlem sözleşmeleri (Aşama 8),
-mükerrerlik karşılaştırması (Aşama 7), GUI.
+* Pencere kabuğu ve değişiklik izleme (Teslim 6.1): `uv run defteriki-arayuz`,
+  aynı hazırlık akışı, durum çubuğu, `Veritabani.degisiklik_sayaci()` ile
+  başka süreçlerin yazdığını görme (`src/defteriki/arayuz/`)
+
+Henüz yok: karar kutusu (6.2), bakiye ve hareket görünümü (6.3), devreden
+bakiye kararı, diğer işlem sözleşmeleri (Aşama 8), mükerrerlik
+karşılaştırması (Aşama 7).
 
 ## Kurulum
 
@@ -416,6 +422,55 @@ yöntemi Cowork'la çalışır, talep durumu veritabanında tutulur.
 | 3.2 | Gerçek Cowork bağlantısı | Bitti (2026-09-15). Ayar: Claude masaüstü `claude_desktop_config.json` → `mcpServers`, komut `uv.exe run --directory C:/dev/DefterIki defteriki-mcp`, ortam değişkeni yok, veri `%LOCALAPPDATA%/DEFTERIKI/gelistirme`. Ölçüm (`mcp_el_sikisma`): istemci `local-agent-mode-defteriki 1.0.0`; müzakere edilen protokol sürümü **2025-11-25** (sunucunun en yükseği 2026-07-28, istemci daha eskisini seçti); istemci yetenekleri `roots.listChanged=true` ve `io.modelcontextprotocol/ui` uzantısı (`text/html;profile=mcp-app`); sampling ve elicitation bildirilmedi. Uygulama açılışta sunucuyu üç kez başlatıyor: biri 10 ms içinde kapanan yoklama, ikisi kalıcı (Cowork ve Claude Code). Zaman aşımı gözlenmedi: başlatmadan araç yanıtına kadar sorun yok, uygulama kapanınca sunucular EOF ile temiz çıktı. Uygulamanın kendi MCP günlüğü boş; ölçüm sunucu günlüğünden alındı. |
 | 3.3 | Dosya erişim denemesi | **Bitti (2026-09-15): dosya yolu yöntemi çalıştı, parça yükleme gerekmez.** Araç `dosya_dene` yazıldı ve testlendi (izinli dosya, boş dosya, alt dizin, dizin dışı, `..`, göreli yol, olmayan dosya, dizin, okuma hatası, stdio üzerinden okuma ve red; simgesel bağlantı testleri Windows'ta bağlantı yetkisi yoksa atlanır). Cowork ayarı: `mcpServers.defteriki.env` → `DEFTERIKI_GELEN_DIZINI=C:/dev/DefterIki-gelen`; uygulama yeniden başlayınca dizin kendiliğinden oluştu. Deneme ~402 KB'lik gerçek bir hesap özeti PDF'iyle iki senaryoda yapıldı: (a) dosya elle gelen dizinine kopyalandı, Cowork'a yol söylendi → `sonuc=okundu`; (b) PDF Cowork'a yüklendi, gelen dizinine bırakması istendi → Cowork dosyayı dizine yazdı ve `dosya_dene` ile okuttu → `sonuc=okundu`. İki dosyanın SHA-256 özeti birebir aynı; Cowork dosyayı bozmadan aktarıyor. Günlükte iki `mcp_dosya_deneme` satırı, red ya da hata yok. Aşama 4 belge alımı bu yöntemle kurulacak: Cowork dosyayı gelen dizinine bırakır, yolu MCP aracına verir. |
 | 3.4 | Çok adımlı protokol denemesi | **Bitti (2026-09-16): Cowork BEKLIYOR döngüsünü kendi başına, sadakatle yürüttü.** Araç çifti `deneme_baslat` / `deneme_durumu` yazıldı ve testlendi (süreç içi sahte saatle bekle→tamamla geçişi, aynı anahtar aynı kimlik, boş anahtar reddi, bilinmeyen kimlik, yanıt ve günlükte anahtar yok; stdio üzerinden başlat→durum→bilinmeyen→tekrar başlat döngüsü). Cowork'a tek cümle verildi: "bir deneme işi başlat; bekliyor dönerse aynı anahtarla durumu sor, tamamlanınca bildir." Günlük (`mcp_deneme`): `deneme_baslat` → BEKLIYOR, talep kimliği verildi; `deneme_durumu` üç kez soruldu: 3,1 s (BEKLIYOR), 17,4 s (BEKLIYOR), 42,5 s (TAMAMLANDI). Sorgu aralıkları yaklaşık 3 s, 14 s, 25 s; Cowork bekleme süresini kendi uzattı, vazgeçmedi, kimliği doğru taşıdı, anahtarı değiştirmedi, aynı işi yeniden başlatmadı. Hiçbir çağrı açık kalmadı; durum sorguları anında döndü. Dört çağrı da aynı sunucu sürecinden (`surec` eşit) geldi: Claude masaüstü sunucuyu yine iki kalıcı süreç olarak başlattı ama tek sohbetin bütün çağrıları tek sürece gitti; BILINMIYOR görülmedi. Aşama 5 için çıkarım: BEKLIYOR + talep kimliği + istemcinin tekrar sorması çalışan bir yöntem; talep durumu yine de belleğe değil veritabanına yazılır, çünkü sohbetler ve uygulama yeniden başlatmaları arası süreç garantisi yok. |
+
+## Pencere (Aşama 6)
+
+Masaüstü penceresi, PySide6 (Qt) ile. **Sınır (K20; Abdüllatif, 2026-09-17):**
+pencere veritabanına doğrudan erişen ikinci bir iş mantığı kurmaz; yenileme
+dahil her okuma ve işlem Aşama 4 işlevleri (`hesaplamalar`, `onaylar`,
+`belgeler`, `nesneler`, `veritabani`) üzerinden yürür; `arayuz/` altında SQL,
+tablo adı ya da PRAGMA yoktur. Bir görünüm için işlev yoksa önce Aşama 4'e
+işlev ve testi eklenir, sonra pencere onu çağırır. Pencere MCP sunucusuyla
+ayrı süreçtir, bellek paylaşmaz; aynı ayarlarla aynı veritabanı dosyasını
+açar.
+
+```bash
+uv run defteriki-arayuz
+```
+
+### Kabuk ve değişiklik izleme (Teslim 6.1)
+
+* `arayuz/baslat.py`: uygulama ve MCP kapısıyla aynı hazırlık
+  (`baslangic.ortami_hazirla`: ayarlar, dizinler, günlük, şema denetimi).
+  Hazırlık düşerse hata ileti kutusunda ve stderr'de, çıkış `1`; günlüğe
+  `arayuz_baslangic` / `arayuz_hatasi`. Hata gösterici ve olay döngüsü test
+  için enjekte edilebilir.
+* `arayuz/ana_pencere.py`: başlık, 1280×720, orta alanda ortam ve
+  veritabanı yolu, durum çubuğunda ortam, şema sürümü ve son değişiklik
+  (yerel saat, sayaçla). Karar kutusu (6.2) ve bakiye/hareket görünümü
+  (6.3) orta alana eklenecek.
+* `arayuz/degisiklik_izleme.py`: `DegisiklikIzleyici`, Qt zamanlayıcısıyla
+  (varsayılan 1 s) `Veritabani.degisiklik_sayaci()` çağırır; değişince
+  `degisti(sayac)` sinyali, görünümler o zaman yenilenir. Yoklama düşerse
+  izleme durur, hata günlüğe (`arayuz_izleme_hatasi`), `durdu(mesaj)`
+  sinyali durum çubuğunda görünür; sessiz yeniden deneme yok.
+* `Veritabani.degisiklik_sayaci()` (Aşama 4 katmanında): SQLite
+  `PRAGMA data_version`; okuma motorundan ayrılmış tek bağlantıda kısa okuma
+  işlemi açıp kapatır, kilit tutmaz; yalnız *başka* bağlantıların commit'i
+  değeri değiştirir. `kapat()` bu bağlantıyı da bırakır.
+* Bağımlılıklar: `PySide6` (ürün), `pytest-qt` (geliştirme);
+  `tests/conftest.py` `QT_QPA_PLATFORM=offscreen` koyar (tanımlıysa dokunmaz),
+  pencere testleri ekransız çalışır. Not: Claude masaüstü `defteriki-mcp.exe`
+  dosyasını kilitli tuttuğu için yeni bağımlılık eklerken MCP süreçleri
+  durdurulur (`Stop-Process defteriki-mcp`), sonra `uv add`.
+
+Test (`tests/test_arayuz.py`): başlık, boyut, durum çubuğu; kapanınca izleme
+durur; başka bağlantının yazması durum çubuğuna düşer (iki kez, sayaç);
+yazma yoksa sinyal yok; izleyici `yokla` değişimi bildirir; yoklama hatası
+izlemeyi durdurur ve günlüğe yazar; `main` başarılı (pencere görünür, olay
+günlükte), ayar hatasında ileti ve `1`, beklenmeyen hatada günlük ve `1`;
+komut girişi `pyproject.toml`de. `tests/test_veritabani.py`: sayaç başka
+bağlantının commit'iyle değişir, kilit tutmaz, `kapat` bağlantıyı bırakır.
 
 ## Veritabanı
 

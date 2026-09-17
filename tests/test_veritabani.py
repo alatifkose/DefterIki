@@ -302,3 +302,48 @@ def test_iki_surec_ayni_ayarlarla_ayni_dosyayi_cozer(
     assert Path(sonuc.stdout.strip()) == ayarlar.veritabani_yolu
     assert list(kimler) == ["alt süreç", "ana süreç"]
     assert not any(baska_dizin.iterdir())
+
+
+# --- değişiklik sayacı -------------------------------------------------------------
+
+
+def test_degisiklik_sayaci_baska_baglantinin_commitiyle_degisir(
+    veritabani: vt.Veritabani, yol: Path
+) -> None:
+    _semayi_kur(veritabani)
+    izleyen = vt.Veritabani(yol, mesgul_bekleme_ms=200)
+    try:
+        ilk = izleyen.degisiklik_sayaci()
+        assert izleyen.degisiklik_sayaci() == ilk  # yazma yoksa sabit
+
+        with veritabani.yazma_islemi() as oturum:
+            oturum.execute(text("INSERT INTO ust (ad) VALUES ('bir')"))
+
+        ikinci = izleyen.degisiklik_sayaci()
+        assert ikinci != ilk
+        assert izleyen.degisiklik_sayaci() == ikinci
+    finally:
+        izleyen.kapat()
+
+
+def test_degisiklik_sayaci_okuma_kilidi_tutmaz(
+    veritabani: vt.Veritabani, yol: Path
+) -> None:
+    """Sayaç okunduktan sonra başka bağlantı beklemeden yazabilir."""
+    _semayi_kur(veritabani)
+    izleyen = vt.Veritabani(yol, mesgul_bekleme_ms=200)
+    try:
+        izleyen.degisiklik_sayaci()
+        with veritabani.yazma_islemi() as oturum:
+            oturum.execute(text("INSERT INTO ust (ad) VALUES ('bir')"))
+        assert _sayi(veritabani, "ust") == 1
+    finally:
+        izleyen.kapat()
+
+
+def test_kapat_izleme_baglantisini_birakir(veritabani: vt.Veritabani) -> None:
+    _semayi_kur(veritabani)
+    veritabani.degisiklik_sayaci()
+    veritabani.kapat()
+    assert veritabani._izleme_baglantisi is None  # pyright: ignore[reportPrivateUsage]
+    veritabani.degisiklik_sayaci()  # kapandıktan sonra yeniden açılabilir

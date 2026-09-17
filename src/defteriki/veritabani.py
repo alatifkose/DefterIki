@@ -23,6 +23,14 @@ yazmaz.
 Python'un ``sqlite3`` sürücüsü işlemleri kendi başına açar; bu davranış
 kapatılır (``isolation_level = None``) ve BEGIN'i SQLAlchemy'nin ``begin``
 olayı üzerinden biz veririz. Aksi hâlde ``BEGIN IMMEDIATE`` uygulanamaz.
+
+**Değişiklik sayacı** (``degisiklik_sayaci``): pencere gibi başka bir süreç
+tarafından yazılanları görmek isteyen okuyucular için SQLite
+``PRAGMA data_version`` değeri. Sayaç bağlantıya özeldir: aynı bağlantıdan
+iki okuma arasında *başka bir bağlantı* commit yaptıysa değer değişir. Bu
+yüzden okuma motorundan ayrılmış tek bir bağlantı tutulur; her okuma kısa
+bir okuma işlemi açıp kapatır, arada kilit tutulmaz. Sayacın mutlak değeri
+anlamsızdır; yalnız değişip değişmediği anlamlıdır.
 """
 
 from __future__ import annotations
@@ -64,6 +72,7 @@ class Veritabani:
         self._okuma_motoru = _motor_kur(yol, mesgul_bekleme_ms, salt_okunur=True)
         self._yazma_oturumu = sessionmaker(self._yazma_motoru, expire_on_commit=False)
         self._okuma_oturumu = sessionmaker(self._okuma_motoru)
+        self._izleme_baglantisi: Connection | None = None
 
     @contextmanager
     def yazma_islemi(self) -> Generator[Session]:
@@ -92,8 +101,25 @@ class Veritabani:
             finally:
                 oturum.rollback()
 
+    def degisiklik_sayaci(self) -> int:
+        """Başka bağlantıların commit'leriyle değişen sayaç (``data_version``).
+
+        Ayrılmış salt okunur bağlantıda kısa bir okuma işlemi açar, değeri
+        alır, işlemi kapatır; kilit tutmaz. İlk çağrı bağlantıyı açar.
+        """
+        if self._izleme_baglantisi is None:
+            self._izleme_baglantisi = self._okuma_motoru.connect()
+        baglanti = self._izleme_baglantisi
+        try:
+            return int(baglanti.exec_driver_sql("PRAGMA data_version").scalar_one())
+        finally:
+            baglanti.rollback()
+
     def kapat(self) -> None:
         """Bağlantı havuzlarını boşaltır; dosyaya dokunmaz."""
+        if self._izleme_baglantisi is not None:
+            self._izleme_baglantisi.close()
+            self._izleme_baglantisi = None
         self._yazma_motoru.dispose()
         self._okuma_motoru.dispose()
 
