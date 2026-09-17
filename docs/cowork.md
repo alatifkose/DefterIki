@@ -1,9 +1,10 @@
 # DEFTERIKI — Cowork Talimatı
 
-**Talimat sürümü: 0.3** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
+**Talimat sürümü: 0.4** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
 bu sürümü okumaya yazar). 0.2: kullanıcı onayı pencereden; tamlık
 toplamları belgeden aynen alınır. 0.3: tamlık beş alanıyla zorunlu, her
-alan DEGER / BELGEDE_YOK / OKUNAMADI.
+alan DEGER / BELGEDE_YOK / OKUNAMADI. 0.4: `kaynak.konum` sözlük olduğu
+yazıldı.
 
 Bu belge, Cowork'un bir banka belgesini DEFTERIKI'ye nasıl işleyeceğini
 anlatır. Cowork belgeyi okur ve MCP araçlarını çağırır. DEFTERIKI kayıtları
@@ -105,6 +106,8 @@ Sıra:
      türü açıkça ver), `MANTIKSAL`, `JSON`. Vermezsen değerden çıkarılır.
    * Seviye gönderme; DEFTERIKI üstlerden hesaplar.
    * `kaynak` ver: hangi belgeden ve belgenin neresinden çıkardığını söyler.
+     `konum` metin değil **sözlüktür**: `{"sayfa": 1, "aciklama": "hesap
+     başlığı"}` gibi; alanlar serbest.
 4. Yanıt `BEKLIYOR` + `talep_id` + `nesne_id` gelir. Nesne `ONAY_BEKLIYOR`
    yazıldı; kullanıcı DEFTERIKI penceresindeki karar kutusundan şart seçip
    onaylayacak.
@@ -121,7 +124,7 @@ Sıra:
 
 `okuma_baslat(belge_id, islem_anahtari, tamlik={beklenen_satir_sayisi,
 acilis_bakiyesi_kurus, kapanis_bakiyesi_kurus, toplam_giris_kurus,
-toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.3`) yazılır.
+toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.4`) yazılır.
 
 **Tamlık zorunludur ve beş alanın her biri bildirilir.** Her alan
 `{"durum": ..., "deger": ...}` biçimindedir:

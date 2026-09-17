@@ -612,7 +612,8 @@ Gözlemler:
   `OKUNAMADI`; `okuma_tamamla`da isteğe bağlı ama verilirse beşi birden;
   satır sayısı `BELGEDE_YOK` olamaz; `OKUNAMADI` belgeyi kayıtlı yapmaz;
   `BELGEDE_YOK` atlanan denetimi kayda geçirir. Eski biçimdeki geliştirme
-  verisi sıfırlandı, uyumluluk kodu yazılmadı. Talimat 0.3. Ayrıntı
+  verisi sıfırlandı, uyumluluk kodu yazılmadı. Talimat 0.3 (0.4: `kaynak.konum`
+  sözlük notu, Cowork'un geri bildirimi). Ayrıntı
   "Belge arşivi ve belge akışı" bölümünde; MCP şeması ve testler
   (`tests/test_mcp_belge_araclari.py`: OKUNAMADI ile tamamlama reddi ve
   DEGER ile kayıt; sunucu üzerinden eksik alan şema reddi, değer sızmaz).

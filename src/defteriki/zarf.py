@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from defteriki import sozlesmeler as sz
 
-TALIMAT_SURUMU = "0.3"
+TALIMAT_SURUMU = "0.4"
 """``docs/cowork.md`` sürümü; Cowork zarftan okur, talimatı buna göre seçer."""
 
 KOD_BEKLENMEYEN = "BEKLENMEYEN_HATA"
