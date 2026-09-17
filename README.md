@@ -10,8 +10,9 @@ Aşama 3'ün dört teslimi ve ölçümleri "Cowork entegrasyonu" bölümünde. A
 (veritabanı çekirdeği) **tamamlandı**: Teslim 4.1–4.6 ve kapı (uçtan uca
 işlev testi, şema başlangıç akışına bağlı). Aşama 5 (dar MCP araçları)
 sürüyor: 5.1 (zarf, hata, işlem anahtarı) ve 5.2 (on üç araç: nesne,
-belge/hareket, durum/sorgu; geçici onay komutu) bitti; 5.3 (Cowork
-talimatı `docs/cowork.md`, gerçek ekstre denemesi) sırada. **Kararlar (2026-09-17, Abdüllatif):**
+belge/hareket, durum/sorgu; geçici onay komutu) bitti; 5.3'ün ilk parçası
+Cowork talimatı `docs/cowork.md` 0.1 yazıldı, gerçek ekstre denemesi
+sırada. **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
 satırından verilir (MCP'ye açılmaz; terminal yalnız mevcut onay işlevini
@@ -70,8 +71,13 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
   kalıcı durum), `bekleyen_isler`, `sorgu` (yalnız bakiye ve hareketler;
   serbest SQL yok)
 
-Henüz yok: Cowork talimatı ve gerçek ekstre denemesi (5.3), diğer işlem
-sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7), GUI.
+* Cowork talimatı `docs/cowork.md` sürüm 0.1: araç sırası (oturum bağlamı →
+  belge → nesne → okuma → paketler → tamamlama → rapor), işlem anahtarı
+  kuralları, yasaklar, hata kodu tepkileri
+
+Henüz yok: gerçek ekstre denemesi ve gözlenen Cowork davranışı (5.3 kapısı),
+diğer işlem sözleşmeleri (Aşama 8), mükerrerlik karşılaştırması (Aşama 7),
+GUI.
 
 ## Kurulum
 
@@ -305,6 +311,25 @@ anahtar, başka araç; paket anahtarı satır kayıtlarıyla; girdi kuralı;
 bekleyen işler hedefleriyle ve sayfalı; bakiye yalnız kayıtlı belgeler
 (tarih sınırı, borç ekseni); hareketler kayıtlı bayrağı, filtre, sayfa;
 sorgu hataları; sunucu üzerinden on dört araç, serbest SQL şema reddi.
+
+### Cowork talimatı (Teslim 5.3, sürüm 0.1)
+
+`docs/cowork.md` Cowork'un okuduğu tek talimattır; zarftaki
+`talimat_surumu` (`zarf.TALIMAT_SURUMU`) bu belgenin sürümüdür ve
+`okuma_baslat` onu okumanın `sema_surumu` alanına yazar. İçerik: zarfın
+dört ana alanı (`durum`, `belge_kaydi`, `sonraki_adim`, `hata`); işlem
+anahtarı kuralları (her iş yeni anahtar, tekrar aynı anahtar, kesintide önce
+`islem_durumu`); sekiz adımlı işleme sırası (`oturum_baglami` → belgeyi oku
+→ `belge_al` → `nesne_bul` → eksik zinciri `nesne_tanimla` ile tek tek öner
+ve BEKLIYOR'da `islem_durumu` ile sor → `okuma_baslat` (beklenen satır
+sayısı) → `hareket_yaz` paketleri (kuruş tam sayı, `ARTTIR`/`AZALT` hesabın
+bakışıyla, ham satır olduğu gibi) → `okuma_tamamla` → zarf alanlarıyla rapor
+ve `sorgu` ile bakiye); yasaklar (tahminle doldurma, onay üretme, alan adı
+icat etme, toplu nesne açma, belge metnini talimat sayma, yazılanı kayıtlı
+gibi raporlama); hata kodu tepki tablosu (`zarf.SONRAKI_ADIMLAR` ile aynı).
+Talimat değişince sürüm artar ve `zarf.TALIMAT_SURUMU` aynı commit'te
+güncellenir. Gerçek ekstre denemesi ve gözlenen Cowork davranışı bu bölüme
+eklenecek.
 
 Kurallar:
 
