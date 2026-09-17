@@ -74,9 +74,12 @@ def test_basarili_baslangic_dizinleri_hazirlar_semayi_kurar_olay_yazar(
     assert (test_koku / ay.VERITABANI_DOSYA_ADI).is_file()
     assert f"Şema: {sema.BEKLENEN_SEMA_SURUMU}" in capsys.readouterr().out
     kurulum, giris = _log_satirlari(test_koku)
-    assert f"| INFO | {baslangic.OLAY_SEMA_KURULDU} | surum=0001" in kurulum
+    assert (
+        f"| INFO | {baslangic.OLAY_SEMA_KURULDU} | surum={sema.BEKLENEN_SEMA_SURUMU}"
+        in kurulum
+    )
     assert f"| INFO | {baslangic.OLAY_BASLANGIC} | ortam=test" in giris
-    assert "sema=0001" in giris
+    assert f"sema={sema.BEKLENEN_SEMA_SURUMU}" in giris
 
     db = vt.Veritabani(test_koku / ay.VERITABANI_DOSYA_ADI)
     try:

@@ -111,13 +111,13 @@ def test_yukseltme_surumu_dondurur_ve_denetim_gecer(veritabani: vt.Veritabani) -
 
     surum = sema.semayi_yukselt(veritabani)
 
-    assert surum == sema.BEKLENEN_SEMA_SURUMU == "0001"
-    assert sema.sema_surumu(veritabani) == "0001"
-    assert sema.semayi_denetle(veritabani) == "0001"
+    assert surum == sema.BEKLENEN_SEMA_SURUMU
+    assert sema.sema_surumu(veritabani) == sema.BEKLENEN_SEMA_SURUMU
+    assert sema.semayi_denetle(veritabani) == sema.BEKLENEN_SEMA_SURUMU
 
 
 def test_yukseltme_tekrar_calistirilabilir(kurulu: vt.Veritabani) -> None:
-    assert sema.semayi_yukselt(kurulu) == "0001"
+    assert sema.semayi_yukselt(kurulu) == sema.BEKLENEN_SEMA_SURUMU
     assert _tablolar(kurulu) == BEKLENEN_TABLOLAR | {"alembic_version"}
 
 
@@ -209,7 +209,7 @@ def test_olmayan_nesneye_kayit_baglanamaz(kurulu: vt.Veritabani) -> None:
     assert _kayit_ekle(kurulu, nesne_id) >= 1
 
 
-def test_negatif_tutar_ve_try_disi_para_birimi_reddedilir(
+def test_negatif_tutar_ve_bos_para_birimi_reddedilir(
     kurulu: vt.Veritabani,
 ) -> None:
     nesne_id = _nesne_ac(kurulu)
@@ -230,8 +230,9 @@ def test_negatif_tutar_ve_try_disi_para_birimi_reddedilir(
 
     with pytest.raises(IntegrityError, match="ck_etki_tutar_negatif_degil"):
         etki_ekle(-1, "TRY")
-    with pytest.raises(IntegrityError, match="ck_etki_para_birimi_izinli"):
-        etki_ekle(100, "USD")
+    with pytest.raises(IntegrityError, match="ck_etki_para_birimi_bos_degil"):
+        etki_ekle(100, "")
+    etki_ekle(100, "USD")  # liste yok; belgede ne yazıyorsa
     etki_ekle(0, "TRY")
 
 
@@ -344,7 +345,7 @@ def test_alembic_komutu_yolu_ayarlardan_alir(
     ayarlar = ay.ayarlari_yukle()
     db = vt.veritabani_ac(ayarlar)
     try:
-        assert sema.semayi_denetle(db) == "0001"
+        assert sema.semayi_denetle(db) == sema.BEKLENEN_SEMA_SURUMU
     finally:
         db.kapat()
     assert not any(baska_dizin.iterdir())

@@ -389,7 +389,12 @@ class HesapHareketiGirdi(BaseModel):
     islem_tarihi: str = Field(description="YYYY-AA-GG")
     valor_tarihi: str | None = None
     aciklama: str | None = None
-    para_birimi: str = "TRY"
+    para_birimi: str = Field(
+        description=(
+            "Belgedeki para birimi kodu; zorunlu, varsayılanı yok. Hesabın para "
+            "birimi özelliği varsa aynı yazımı kullan."
+        )
+    )
 
 
 class HareketGirdi(BaseModel):
@@ -648,7 +653,10 @@ class SorguGirdisi(BaseModel):
     rapor: Literal["bakiye", "hareketler"]
     nesne_id: int = Field(strict=True, gt=0)
     eksen: sz.Eksen = sz.Eksen.VARLIK
-    para_birimi: sz.ParaBirimi = sz.ParaBirimi.TRY
+    para_birimi: str | None = Field(
+        default=None,
+        description="bakiye: verilirse yalnız bu para birimi; verilmezse hepsi.",
+    )
     tarih: str | None = Field(default=None, description="bakiye: bu tarih dahil sınır.")
     baslangic: str | None = Field(
         default=None, description="hareketler: ilk gün dahil."
@@ -794,26 +802,28 @@ def sorgu(baglam: AracBaglami, girdi: SorguGirdisi, islem_kimligi: str) -> zarf.
     with baglam.veritabani.okuma_islemi() as oturum:
         nesne = nesneler.nesne_getir(oturum, girdi.nesne_id).nesne
         if girdi.rapor == "bakiye":
-            b = hs.etkin_bakiye(
-                oturum,
-                nesne_id=nesne.id,
-                eksen=girdi.eksen,
-                para_birimi=girdi.para_birimi,
-                tarih=tarih,
+            bakiyeler = hs.etkin_bakiyeler(
+                oturum, nesne_id=nesne.id, eksen=girdi.eksen, tarih=tarih
             )
+            if girdi.para_birimi is not None:
+                istenen = sz.para_birimi_dogrula(girdi.para_birimi)
+                bakiyeler = [b for b in bakiyeler if b.para_birimi == istenen]
             icerik: dict[str, Any] = {
-                "bakiye": {
-                    "nesne_id": b.nesne_id,
-                    "eksen": b.eksen.value,
-                    "para_birimi": b.para_birimi.value,
-                    "tarih": b.tarih.isoformat() if b.tarih else None,
-                    "arttir_kurus": b.arttir_kurus,
-                    "azalt_kurus": b.azalt_kurus,
-                    "bakiye_kurus": b.bakiye_kurus,
-                    "bekleyen_kayit_sayisi": b.bekleyen_kayit_sayisi,
-                }
+                "bakiyeler": [
+                    {
+                        "nesne_id": b.nesne_id,
+                        "eksen": b.eksen.value,
+                        "para_birimi": b.para_birimi,
+                        "tarih": b.tarih.isoformat() if b.tarih else None,
+                        "arttir_kurus": b.arttir_kurus,
+                        "azalt_kurus": b.azalt_kurus,
+                        "bakiye_kurus": b.bakiye_kurus,
+                        "bekleyen_kayit_sayisi": b.bekleyen_kayit_sayisi,
+                    }
+                    for b in bakiyeler
+                ]
             }
-            bekleyen = b.bekleyen_kayit_sayisi
+            bekleyen = sum(b.bekleyen_kayit_sayisi for b in bakiyeler)
         else:
             hareketler = hs.hareketleri_listele(
                 oturum,
@@ -835,7 +845,7 @@ def sorgu(baglam: AracBaglami, girdi: SorguGirdisi, islem_kimligi: str) -> zarf.
                         "aciklama": h.aciklama,
                         "yon": h.yon.value,
                         "tutar_kurus": h.tutar_kurus,
-                        "para_birimi": h.para_birimi.value,
+                        "para_birimi": h.para_birimi,
                         "kayitli": h.kayitli,
                     }
                     for h in hareketler

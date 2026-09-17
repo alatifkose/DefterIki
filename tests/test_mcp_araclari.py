@@ -235,7 +235,7 @@ def _cagir(sunucu: Any, ad: str, args: dict[str, Any]) -> dict[str, Any]:
 def test_sema_reddi_degerleri_disari_vermez(
     db: vt.Veritabani, ayarlar: ay.Ayarlar
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", db)
+    sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, db)
     gizli = "GIZLI-DEGER-123"
 
     yanit = _cagir(
@@ -256,14 +256,14 @@ def test_sema_reddi_degerleri_disari_vermez(
 def test_bilinmeyen_arac_sdk_hatasiyla_doner(
     db: vt.Veritabani, ayarlar: ay.Ayarlar
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", db)
+    sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, db)
     bos: dict[str, Any] = {}
     with pytest.raises(Exception, match="Unknown tool"):
         anyio.run(sunucu.call_tool, "yok_boyle_arac", bos)
 
 
 def test_sunucu_araclari_ve_semalari(db: vt.Veritabani, ayarlar: ay.Ayarlar) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", db)
+    sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, db)
     araclar = {a.name: a for a in anyio.run(sunucu.list_tools)}
 
     assert set(araclar) == set(mcp_kapisi.YETENEKLER)
@@ -280,7 +280,7 @@ def test_sunucu_araclari_ve_semalari(db: vt.Veritabani, ayarlar: ay.Ayarlar) -> 
     assert nesne.output_schema is not None
     assert set(nesne.output_schema["required"]) >= {"durum", "islem_kimligi"}
     assert nesne.output_schema["properties"]["durum"]["$ref"].endswith("YanitDurumu")
-    durum = mcp_kapisi.sistem_durumu(ayarlar, "0001")
+    durum = mcp_kapisi.sistem_durumu(ayarlar, sema.BEKLENEN_SEMA_SURUMU)
     assert durum.yetenekler == list(mcp_kapisi.YETENEKLER)
     assert durum.talimat_surumu == zarf.TALIMAT_SURUMU
 
@@ -288,7 +288,7 @@ def test_sunucu_araclari_ve_semalari(db: vt.Veritabani, ayarlar: ay.Ayarlar) -> 
 def test_sunucu_uzerinden_gonder_zarf_doner(
     db: vt.Veritabani, ayarlar: ay.Ayarlar
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", db)
+    sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, db)
     yanit = _cagir(
         sunucu,
         mcp_kapisi.ARAC_NESNE_TANIMLA,

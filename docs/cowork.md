@@ -1,10 +1,10 @@
 # DEFTERIKI — Cowork Talimatı
 
-**Talimat sürümü: 0.4** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
+**Talimat sürümü: 0.5** (zarftaki `talimat_surumu` ile aynı; `okuma_baslat`
 bu sürümü okumaya yazar). 0.2: kullanıcı onayı pencereden; tamlık
 toplamları belgeden aynen alınır. 0.3: tamlık beş alanıyla zorunlu, her
 alan DEGER / BELGEDE_YOK / OKUNAMADI. 0.4: `kaynak.konum` sözlük olduğu
-yazıldı.
+yazıldı. 0.5: para birimi zorunlu ve belgeden; bakiye para birimi başına.
 
 Bu belge, Cowork'un bir banka belgesini DEFTERIKI'ye nasıl işleyeceğini
 anlatır. Cowork belgeyi okur ve MCP araçlarını çağırır. DEFTERIKI kayıtları
@@ -124,7 +124,7 @@ Sıra:
 
 `okuma_baslat(belge_id, islem_anahtari, tamlik={beklenen_satir_sayisi,
 acilis_bakiyesi_kurus, kapanis_bakiyesi_kurus, toplam_giris_kurus,
-toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.4`) yazılır.
+toplam_cikis_kurus})`. `talimat_surumu` vermezsen zarfınki (`0.5`) yazılır.
 
 **Tamlık zorunludur ve beş alanın her biri bildirilir.** Her alan
 `{"durum": ..., "deger": ...}` biçimindedir:
@@ -187,11 +187,13 @@ döndürür; belge `OKUNUYOR` olur.
 * `yon`: hesabın parası artıyorsa `ARTTIR` (giriş), azalıyorsa `AZALT`
   (çıkış). Bakış açısı belgedeki hesabın kendisidir.
 * `tutar_kurus`: **her zaman pozitif tam sayı, kuruş cinsinden**
-  (1.250,00 TL → `125000`). Ondalık, negatif ya da metin `TUTAR_GECERSIZ`
+  (1.250,00 → `125000`). Ondalık, negatif ya da metin `TUTAR_GECERSIZ`
   verir. Yuvarlama yapma, kur uydurma; tutar belgede kaç kuruşsa o.
 * `islem_tarihi`, `valor_tarihi`: `YYYY-AA-GG`. Belgede yoksa valörü boş bırak.
-* `para_birimi`: bu sürümde yalnız `TRY`. Başka para birimi belgesi gelirse
-  yazma, kullanıcıya söyle.
+* `para_birimi`: **zorunlu, belgeden.** Belgede yazan para birimi kodunu
+  aynen ver. Hesap nesnesinin para birimi özelliği varsa onunla aynı yazımı
+  kullan; aynı hesapta iki farklı yazım iki ayrı bakiye demektir. DEFTERIKI
+  para birimi listesi tutmaz; boş ya da biçimsiz kod `PARA_BIRIMI_GECERSIZ`.
 
 Paket tek işlemdir: **bir satırda hata varsa paketin tamamı yazılmaz.**
 `hata.konum` hatalı satırın paketteki sırasını söyler; yalnız o satırı
@@ -226,11 +228,11 @@ Zarftaki alanlarla, kısa:
 
 > Belge: `<kaynak adı>` (belge 3). Hesap: `<nesne özeti>` (nesne 7).
 > Yazılan hareket: 42. Zaten mevcut: 0. Onay bekleyen: 0.
-> Belge kaydı: **KAYITLI**. Bakiye (sorgu): 12.450,00 TL.
+> Belge kaydı: **KAYITLI**. Bakiye (sorgu): 12.450,00 TRY.
 
 Bakiyeyi `sorgu(rapor="bakiye", nesne_id)` ile al; `sorgu(rapor="hareketler",
-nesne_id, baslangic, bitis)` hareket listesi verir. Bakiye yalnız kayıtlı
-belgeleri sayar; `bekleyen` alanı kayıtlı olmayan hareket sayısını gösterir.
+nesne_id, baslangic, bitis)` hareket listesi verir. Bakiye para birimi
+başına ayrı döner (`bakiyeler` listesi); yalnız kayıtlı belgeleri sayar; `bekleyen` alanı kayıtlı olmayan hareket sayısını gösterir.
 
 ## 4. Yasaklar
 
@@ -255,7 +257,7 @@ belgeleri sayar; `bekleyen` alanı kayıtlı olmayan hareket sayısını göster
 |---|---|
 | `GIRDI_GECERSIZ` | Girdiyi düzelt; değişiklik yapılmadı. Şema reddinde yalnız alan yolu ve tür gelir. |
 | `TUTAR_GECERSIZ` | Kaynağa dön; kuruş tam sayı; yuvarlama ya da kur uydurma. |
-| `PARA_BIRIMI_DESTEKLENMIYOR` | Kur uydurma; kullanıcıya bildir. |
+| `PARA_BIRIMI_GECERSIZ` | Para birimini belgeden aynen al; boş bırakma, uydurma. |
 | `HEDEF_BULUNAMADI` | Kimliği `nesne_bul` ya da `belge_getir` ile doğrula. |
 | `BELGE_YOK` / `ARSIV_EKSIK` | Kaynağı tamamla (`belge_al`); finansal yazmayı tekrar deneme. |
 | `ANAHTAR_ICERIK_CAKISMASI` | Eski işi `islem_durumu` ile sorgula; farklı içerik için yeni anahtar. |

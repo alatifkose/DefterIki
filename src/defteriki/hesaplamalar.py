@@ -30,7 +30,7 @@ from defteriki import sozlesmeler as sz
 class Bakiye:
     nesne_id: int
     eksen: sz.Eksen
-    para_birimi: sz.ParaBirimi
+    para_birimi: str
     tarih: date | None
     """Verilmişse bu tarih dahil olmak üzere işlem tarihi sınırı."""
     arttir_kurus: int
@@ -52,7 +52,7 @@ class HareketOzeti:
     aciklama: str | None
     yon: sz.Yon
     tutar_kurus: int
-    para_birimi: sz.ParaBirimi
+    para_birimi: str
     kayitli: bool
     """Etki en az bir KAYITLI belgeye dayanıyor; yoksa yazılmış ama bekliyor."""
 
@@ -79,20 +79,56 @@ def _etkin_destek_var() -> Select[tuple[int]]:
     )
 
 
-def etkin_bakiye(
+def para_birimleri(
+    oturum: Session, *, nesne_id: int, eksen: sz.Eksen = sz.Eksen.VARLIK
+) -> list[str]:
+    """Nesnenin bu eksende etkisi bulunan para birimleri, alfabetik.
+
+    Liste koddan değil kayıtlardan gelir; hiç hareket yoksa boştur.
+    """
+    e = sema.etki
+    return [
+        str(p)
+        for p in oturum.execute(
+            select(e.c.para_birimi)
+            .distinct()
+            .where(e.c.nesne_id == nesne_id, e.c.eksen == eksen.value)
+            .order_by(e.c.para_birimi)
+        ).scalars()
+    ]
+
+
+def etkin_bakiyeler(
     oturum: Session,
     *,
     nesne_id: int,
     eksen: sz.Eksen = sz.Eksen.VARLIK,
-    para_birimi: sz.ParaBirimi = sz.ParaBirimi.TRY,
+    tarih: date | None = None,
+) -> list[Bakiye]:
+    """Nesnenin bu eksendeki bütün para birimleri için etkin bakiye, ayrı ayrı."""
+    return [
+        etkin_bakiye(oturum, nesne_id=nesne_id, eksen=eksen, para_birimi=p, tarih=tarih)
+        for p in para_birimleri(oturum, nesne_id=nesne_id, eksen=eksen)
+    ]
+
+
+def etkin_bakiye(
+    oturum: Session,
+    *,
+    nesne_id: int,
+    para_birimi: str,
+    eksen: sz.Eksen = sz.Eksen.VARLIK,
     tarih: date | None = None,
 ) -> Bakiye:
-    """Nesnenin bir eksendeki etkin bakiyesi; her etki bir kez (EXISTS)."""
+    """Nesnenin bir eksen ve para birimindeki etkin bakiyesi; her etki bir kez.
+
+    ``para_birimi`` zorunludur; varsayılan para birimi yoktur.
+    """
     e, k = sema.etki, sema.kayit
     kosullar = [
         e.c.nesne_id == nesne_id,
         e.c.eksen == eksen.value,
-        e.c.para_birimi == para_birimi.value,
+        e.c.para_birimi == para_birimi,
         k.c.durum == sz.KayitDurumu.AKTIF.value,
     ]
     if tarih is not None:
@@ -176,7 +212,7 @@ def hareketleri_listele(
             aciklama=s[4],
             yon=sz.Yon(s[5]),
             tutar_kurus=int(s[6]),
-            para_birimi=sz.ParaBirimi(s[7]),
+            para_birimi=str(s[7]),
             kayitli=bool(s[8]),
         )
         for s in satirlar

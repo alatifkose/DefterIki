@@ -156,7 +156,7 @@ kapatınca `0` ile çıkar. Hazırlık düşerse hata stderr'e yazılır, çık�
 `1` olur; stdout'a hiçbir şey yazılmaz.
 
 Araçlar (`YETENEKLER`, kayıt sırasıyla): `sistem_durumu` (uygulama
-sürümü, ortam, şema sürümü `0001`, yetenek listesi, talimat sürümü; yol ya
+sürümü, ortam, şema sürümü (`BEKLENEN_SEMA_SURUMU`), yetenek listesi, talimat sürümü; yol ya
 da sır içermez), `nesne_tanimla` (FORM/GONDER, 5.1), `nesne_bul`,
 `nesne_getir`, `oturum_baglami` (5.2/1), `belge_al`, `belge_getir`,
 `okuma_baslat`, `hareket_yaz`, `okuma_tamamla`, `belge_kaydet` (5.2/2),
@@ -617,6 +617,16 @@ Gözlemler:
   "Belge arşivi ve belge akışı" bölümünde; MCP şeması ve testler
   (`tests/test_mcp_belge_araclari.py`: OKUNAMADI ile tamamlama reddi ve
   DEGER ile kayıt; sunucu üzerinden eksik alan şema reddi, değer sızmaz).
+* **Para birimi koddan çıktı (2026-09-17, Abdüllatif: "kodda para birimi
+  olamaz; para birimi ya da özel finansal tanımlar hiçbiri kodda olamaz").**
+  `ParaBirimi` enum'u, TRY varsayılanları ve "TL" gösterim eşlemesi kaldırıldı.
+  Hareket yazarken para birimi zorunlu ve belgeden (`HesapHareketiGirdi`,
+  `HesapHareketi`); `sorgu` bakiyesi ve pencere para birimi başına ayrı döner
+  (`hesaplamalar.etkin_bakiyeler`, `para_birimleri`; `PencereIslevleri.bakiyeler`);
+  `tutar_metni` kodu olduğu gibi yazar. Şema 0002. Talimat 0.5: para birimi
+  belgeden aynen, hesap nesnesinin para birimi özelliğiyle aynı yazım. Test
+  `test_kaynak_kodda_para_birimi_ya_da_etiket_yok` kaynak kodda para birimi
+  kodu ya da "TL" etiketi bulunmamasını kalıcı olarak denetler.
 * Devreden açılış bakiyesi (0,68 TL) yine bakiyeye girmedi; açık karar
   (Aşama 5 kapısı notu).
 
@@ -645,8 +655,10 @@ Ortak sözleşmeler `src/defteriki/sozlesmeler.py`'de; ürün mantığı içerme
 * `Kimlik` pozitif tam sayı, `KurusTutar` kuruş cinsinden 0 ya da pozitif tam
   sayı (K05). İkisi de katı: `12.0`, `True`, `"100"` reddedilir, yuvarlama
   yok. `kurus_tutar_dogrula` → `TUTAR_GECERSIZ`.
-* `Yon` ARTTIR/AZALT, `Eksen` VARLIK/BORC/GIDER, `ParaBirimi` yalnız TRY
-  (C09; `para_birimi_dogrula` → `PARA_BIRIMI_DESTEKLENMIYOR`).
+* `Yon` ARTTIR/AZALT, `Eksen` VARLIK/BORC/GIDER; para birimi **kodda yok**
+  (karar 2026-09-17, C09 iptal): `para_birimi_dogrula` yalnız biçim denetler
+  (boş değil, boşluksuz, en çok 16 karakter) → `PARA_BIRIMI_GECERSIZ`; kod
+  belgeden geldiği gibi saklanır.
 * Durum adları (C08): belge ARSIVLENDI → OKUNUYOR → KARAR_BEKLIYOR → HAZIR →
   KAYITLI, GECERSIZ, YERINE_GECILDI; satır YAZILDI, KARAR_BEKLIYOR,
   MEVCUDA_BAGLANDI, KAPSAM_DISI; nesne AKTIF, ENGELLI, PASIF, SILINDI.
@@ -714,7 +726,10 @@ kaynak rolü `ASIL`/`DESTEK`, kaynak durumu `AKTIF`/`KALDIRILDI`; onay türü
 Tek defter kararıyla 11.2'deki `DEFTER_UYUSMAZLIGI` kodu `HEDEF_BULUNAMADI`
 oldu (verilen kimlikte kayıt yok).
 
-Sürüm denetimi (`sema.py`): `BEKLENEN_SEMA_SURUMU = "0001"`.
+Sürüm denetimi (`sema.py`): `BEKLENEN_SEMA_SURUMU = "0002"`
+(`0002_para_birimi_serbest`: `etki.para_birimi` izinli liste kısıtı kalktı,
+yerine "boş değil"; mevcut veritabanı `uv run alembic upgrade head` ile
+yükseltilir, veri korunur).
 `semayi_denetle` veritabanındaki Alembic sürümünü okur; kurulmamış ya da
 farklıysa `SemaSurumuUyumsuz` verir, eski şemaya yazılmaz. `semayi_yukselt`
 migration'ları tek yazma işleminde (`BEGIN IMMEDIATE`) uygular, ardından
@@ -730,7 +745,7 @@ tabloda defter kimliği yok; `foreign_key_check`/`integrity_check` temiz;
 metadata ile migration arasında fark yok; sürüm denetimi (kurulmamış, farklı
 sürüm); tekrar yükseltme; geri alma bütün tabloları kaldırır; kısıtlar
 veritabanında çalışır (izinsiz durum, olmayan nesneye kayıt, negatif tutar,
-TRY dışı para birimi, kendine bağlantı, boş alan adı, aynı alan adı iki kez,
+boş para birimi, kendine bağlantı, boş alan adı, aynı alan adı iki kez,
 aynı dosya iki belge olamaz, kimlik yeniden kullanılmaz); komut satırından
 yükseltme başka çalışma dizininden ayarlardaki yolu bulur.
 
@@ -1004,7 +1019,8 @@ gelir, çıkan para gider sayılmaz (gider anlamı Aşama 8'in sözleşmeleriyle
 `finansal_kurallar.hesap_hareketi_dogrula(HesapHareketi)` saf işlevdir,
 veritabanına dokunmaz: nesne kimliği katı, yön `ARTTIR`/`AZALT`, tutar kuruş
 cinsinden pozitif tam sayı (S20: `float`, `bool`, metin, `Decimal`, sıfır ve
-64 bit taşma açık ret, sessiz yuvarlama yok), para birimi yalnız TRY, işlem
+64 bit taşma açık ret, sessiz yuvarlama yok), para birimi zorunlu ve belgeden
+(varsayılan yok), işlem
 tarihi zorunlu ve valör isteğe bağlı (`date` ya da `YYYY-AA-GG`; `datetime`
 reddedilir), açıklama en çok 512 karakter. Çıktı `HareketTaslagi`: kayıt
 alanları + tek `VARLIK` etkisi.
@@ -1073,7 +1089,7 @@ etki yok (K18); tablo sayıları ve işlem anahtarı sayısı doğrulanır. İki
 test: uygulama kapanıp açılınca veri yerinde, şema yeniden kurulmaz.
 Başlangıç testleri: ilk başlatma şemayı kurar ve on beş tabloyu açar, ikinci
 başlatma kurmaz, yabancı sürümde (`0000`) `1` ile durur ve "yedek" der; MCP
-stdio testi `sema_surumu=0001` görür.
+stdio testi `sema_surumu`nü görür.
 
 ## Teknik hata günlüğü
 
@@ -1177,7 +1193,7 @@ src/defteriki/    uygulama paketi
   finansal_kurallar.py  işlem sözleşmeleri (yalnız HESAP_HAREKETI), saf doğrulama
   kayitlar.py     hareket yazma: kayıt + etki + kaynak bağı, tek işlem
   hesaplamalar.py etkin bakiye (yalnız KAYITLI belge, EXISTS), hareket listesi
-migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py)
+migrations/       Alembic ortamı (env.py) ve sürümler (versions/0001_ilk_sema.py, 0002_para_birimi_serbest.py)
 alembic.ini       Alembic ayarı; URL yok, yol ayarlardan
 tests/            pytest testleri
 scripts/          geliştirme betikleri (kontrol.py)

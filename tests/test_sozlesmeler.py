@@ -1,5 +1,8 @@
 """Ortak sözleşme testleri: katı tür doğrulama, durum adları, hata ailesi, sayfalama."""
 
+import re
+from pathlib import Path
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -59,21 +62,30 @@ def test_kimlik_gecersiz_degerler_reddedilir(deger: object) -> None:
     assert bilgi.value.alan == "nesne_id"
 
 
-# --- para birimi (C09) ---------------------------------------------------------
+# --- para birimi: kodda liste yok (karar 2026-09-17) ------------------------------
 
 
-@pytest.mark.parametrize("deger", ["TRY", sz.ParaBirimi.TRY])
-def test_para_birimi_try_kabul(deger: object) -> None:
-    assert sz.para_birimi_dogrula(deger) is sz.ParaBirimi.TRY
+@pytest.mark.parametrize("deger", ["TRY", "USD", " EUR ", "xau", "TL"])
+def test_para_birimi_belgeden_gelen_kod_kirpilip_saklanir(deger: str) -> None:
+    assert sz.para_birimi_dogrula(deger) == deger.strip()
 
 
-@pytest.mark.parametrize("deger", ["USD", "EUR", "try", "", None, 949])
-def test_para_birimi_try_disi_reddedilir(deger: object) -> None:
-    with pytest.raises(sz.ParaBirimiDesteklenmiyor) as bilgi:
+@pytest.mark.parametrize("deger", ["", "   ", None, 949, "TR Y", "A" * 17, "a\tb"])
+def test_bos_ya_da_bicimsiz_para_birimi_reddedilir(deger: object) -> None:
+    with pytest.raises(sz.ParaBirimiGecersiz) as bilgi:
         sz.para_birimi_dogrula(deger)
+    assert bilgi.value.kod == "PARA_BIRIMI_GECERSIZ"
+    assert bilgi.value.alan == "para_birimi"
 
-    assert bilgi.value.kod == "PARA_BIRIMI_DESTEKLENMIYOR"
-    assert "TRY" in bilgi.value.mesaj
+
+def test_kaynak_kodda_para_birimi_ya_da_etiket_yok() -> None:
+    """Kural: para birimi, simge ya da finansal liste koda gömülmez."""
+    kok = Path(__file__).resolve().parent.parent / "src" / "defteriki"
+    yasak = re.compile(r"""(?<![A-Za-z_])(TRY|USD|EUR|XAU)(?![A-Za-z_])|"TL"|'TL'""")
+    for dosya in sorted(kok.rglob("*.py")):
+        for satir in dosya.read_text(encoding="utf-8").splitlines():
+            govde = satir.split("#", 1)[0]
+            assert not yasak.search(govde), f"{dosya.name}: {satir.strip()}"
 
 
 # --- durum adları (C08) ----------------------------------------------------------
@@ -133,7 +145,7 @@ def test_hata_kodlari_benzersiz_ve_11_2_ile_ortusur_tek_defter() -> None:
         "NESNE_ENGELLI",
         "YENI_NESNE_ENGELI",
         "TUTAR_GECERSIZ",
-        "PARA_BIRIMI_DESTEKLENMIYOR",
+        "PARA_BIRIMI_GECERSIZ",
         "ANAHTAR_ICERIK_CAKISMASI",
         "HEDEF_SURUMU_DEGISTI",
         "BELGE_HAZIR_DEGIL",

@@ -144,6 +144,7 @@ def _hareket(
         "yon": "ARTTIR",
         "tutar_kurus": tutar,
         "islem_tarihi": date(2026, 8, 1),
+        "para_birimi": "TRY",
     }
     alanlar.update(degisiklik)
     return fk.HesapHareketi(**alanlar)  # pyright: ignore[reportArgumentType]
@@ -212,7 +213,7 @@ def test_hareket_kayit_etki_kaynak_ve_satiri_tek_islemde_yazar(
         sz.Eksen.VARLIK,
         sz.Yon.ARTTIR,
         10_000,
-        sz.ParaBirimi.TRY,
+        "TRY",
     )
     (kaynak,) = sonuc.kayit.kaynaklar
     assert kaynak.okuma_satir_id == sonuc.satir.id

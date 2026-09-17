@@ -277,7 +277,7 @@ def test_sunucu_uzerinden_nesne_araclari(
     db: vt.Veritabani, ayarlar: ay.Ayarlar, garanti: tuple[int, int, int]
 ) -> None:
     banka = garanti[0]
-    sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", db)
+    sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, db)
     araclar = {a.name for a in anyio.run(sunucu.list_tools)}
     assert araclar == set(mcp_kapisi.YETENEKLER)
     assert "onay" not in " ".join(araclar)  # onay komutu MCP'de yok

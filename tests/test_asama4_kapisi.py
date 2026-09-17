@@ -117,6 +117,7 @@ def _hareket(
                 yon=yon,
                 tutar_kurus=tutar,
                 islem_tarihi=date(2026, 8, gun),
+                para_birimi="TRY",
                 aciklama=f"hareket {n}",
             ),
             islem_anahtari=f"hareket-{n}",
@@ -132,7 +133,10 @@ def test_ucta_uca_nesneden_bakiyeye(
     # 0. Başlangıç şemayı kurdu; MCP durumu gerçek sürümü söyler.
     assert hazirlik.sema_surumu == sema.BEKLENEN_SEMA_SURUMU
     assert ayarlar.veritabani_yolu.is_file()
-    assert mcp_kapisi.sistem_durumu(ayarlar, hazirlik.sema_surumu).sema_surumu == "0001"
+    assert (
+        mcp_kapisi.sistem_durumu(ayarlar, hazirlik.sema_surumu).sema_surumu
+        == sema.BEKLENEN_SEMA_SURUMU
+    )
 
     # 1. Garanti BBVA ME ekstresi geldi: banka ve yalnız ME hesabı, şart seçimiyle onay.
     banka = _nesne_onayla(
@@ -209,7 +213,7 @@ def test_ucta_uca_nesneden_bakiyeye(
         )
     # Yazıldı ama kayıtlı değil: bakiye sıfır, üç hareket bekliyor (K19).
     with db.okuma_islemi() as oturum:
-        once = hs.etkin_bakiye(oturum, nesne_id=hesap.id)
+        once = hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap.id)
         liste = hs.hareketleri_listele(oturum, nesne_id=hesap.id)
     assert once.bakiye_kurus == 0 and once.bekleyen_kayit_sayisi == 3
     assert [h.kayitli for h in liste] == [False, False, False]
@@ -228,10 +232,12 @@ def test_ucta_uca_nesneden_bakiyeye(
 
     # 6. Bakiye hesaplara girdi.
     with db.okuma_islemi() as oturum:
-        sonra = hs.etkin_bakiye(oturum, nesne_id=hesap.id)
+        sonra = hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap.id)
         liste = hs.hareketleri_listele(oturum, nesne_id=hesap.id)
-        agustos_5 = hs.etkin_bakiye(oturum, nesne_id=hesap.id, tarih=date(2026, 8, 5))
-        banka_bakiyesi = hs.etkin_bakiye(oturum, nesne_id=banka.id)
+        agustos_5 = hs.etkin_bakiye(
+            oturum, para_birimi="TRY", nesne_id=hesap.id, tarih=date(2026, 8, 5)
+        )
+        banka_bakiyesi = hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=banka.id)
     assert (sonra.arttir_kurus, sonra.azalt_kurus, sonra.bakiye_kurus) == (
         2_000_00,
         750_00,
@@ -260,7 +266,10 @@ def test_ucta_uca_nesneden_bakiyeye(
     )
     assert tekrar.zaten_vardi and tekrar.belge.id == alinan.belge.id
     with db.okuma_islemi() as oturum:
-        assert hs.etkin_bakiye(oturum, nesne_id=hesap.id).bakiye_kurus == 1_250_00
+        assert (
+            hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap.id).bakiye_kurus
+            == 1_250_00
+        )
         sayilar = {
             tablo.name: int(
                 oturum.execute(select(func.count()).select_from(tablo)).scalar_one()

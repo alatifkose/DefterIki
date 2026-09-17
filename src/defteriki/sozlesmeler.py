@@ -8,7 +8,7 @@ cevap vermez, yalnız "ne" sorusuna.
   pozitif tam sayı (K05). İkisi de katıdır: ``float`` ve ``bool`` açık hatayla
   reddedilir, sessiz dönüşüm yoktur.
 * **Yön** ARTTIR / AZALT, **eksen** VARLIK / BORC / GIDER, **para birimi**
-  yalnız TRY (C09; alan şemada vardır, TRY dışı değer açık hata).
+  belgeden gelen kod (kodda liste yok; boş ya da biçimsiz değer açık hata).
 * **Durumlar** (C08): belge, satır ve nesne durum adları tek yerde. Tam
   Plan'ın açık bıraktığı listeler (kayıt, okuma, kaynak rolü ve durumu,
   onay türü ve durumu, değer türü, denetim aktörü)
@@ -57,10 +57,9 @@ class Eksen(StrEnum):
     GIDER = "GIDER"
 
 
-class ParaBirimi(StrEnum):
-    """Desteklenen para birimleri; bu sürümde yalnız TRY (C09)."""
-
-    TRY = "TRY"
+AZAMI_PARA_BIRIMI_UZUNLUGU = 16
+"""Para birimi kodu için biçim sınırı; hangi para birimlerinin var olduğu kodda
+değil belgelerde ve nesnelerdedir (kural: koda gömülü finansal tanım yok)."""
 
 
 # --- durumlar (C08) ----------------------------------------------------------
@@ -238,8 +237,11 @@ class TutarGecersiz(DefterikiHatasi):
     kod = "TUTAR_GECERSIZ"
 
 
-class ParaBirimiDesteklenmiyor(DefterikiHatasi):
-    kod = "PARA_BIRIMI_DESTEKLENMIYOR"
+class ParaBirimiGecersiz(DefterikiHatasi):
+    """Para birimi boş ya da biçimsiz; hangi para biriminin geçerli olduğu koda
+    değil belgeye ve nesneye bağlıdır."""
+
+    kod = "PARA_BIRIMI_GECERSIZ"
 
 
 class AnahtarIcerikCakismasi(DefterikiHatasi):
@@ -278,7 +280,7 @@ HATA_KODLARI: tuple[type[DefterikiHatasi], ...] = (
     NesneEngelli,
     YeniNesneEngeli,
     TutarGecersiz,
-    ParaBirimiDesteklenmiyor,
+    ParaBirimiGecersiz,
     AnahtarIcerikCakismasi,
     HedefSurumuDegisti,
     BelgeHazirDegil,
@@ -314,19 +316,27 @@ def kurus_tutar_dogrula(deger: object, alan: str = "tutar") -> int:
         ) from None
 
 
-def para_birimi_dogrula(deger: object, alan: str = "para_birimi") -> ParaBirimi:
-    """Desteklenen para birimini döndürür; aksi hâlde ``ParaBirimiDesteklenmiyor``."""
-    if isinstance(deger, ParaBirimi):
-        return deger
-    if isinstance(deger, str):
-        try:
-            return ParaBirimi(deger)
-        except ValueError:
-            pass
-    desteklenen = ", ".join(birim.value for birim in ParaBirimi)
-    raise ParaBirimiDesteklenmiyor(
-        f"desteklenen para birimleri: {desteklenen}", alan=alan
-    )
+def para_birimi_dogrula(deger: object, alan: str = "para_birimi") -> str:
+    """Para birimi kodunu biçim olarak doğrular; listeyle karşılaştırmaz.
+
+    Belgeden gelen kod olduğu gibi saklanır (boşlukları kırpılmış); boş,
+    metin olmayan, boşluk içeren ya da uzun değer ``ParaBirimiGecersiz``.
+    """
+    if not isinstance(deger, str):
+        raise ParaBirimiGecersiz(
+            "para birimi belgeden gelen kısa metin olmalı", alan=alan
+        )
+    kod = deger.strip()
+    if not kod or any(c.isspace() for c in kod) or not kod.isprintable():
+        raise ParaBirimiGecersiz(
+            "para birimi boş olamaz ve boşluk içeremez; belgede yazanı aynen ver",
+            alan=alan,
+        )
+    if len(kod) > AZAMI_PARA_BIRIMI_UZUNLUGU:
+        raise ParaBirimiGecersiz(
+            f"para birimi en çok {AZAMI_PARA_BIRIMI_UZUNLUGU} karakter", alan=alan
+        )
+    return kod
 
 
 # --- zaman -------------------------------------------------------------------

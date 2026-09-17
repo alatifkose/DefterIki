@@ -140,6 +140,7 @@ def _hareket(
             yon=sz.Yon(yon),
             tutar_kurus=tutar,
             islem_tarihi=f"2026-08-{gun:02d}",
+            para_birimi="TRY",
         ),
     )
 
@@ -228,7 +229,9 @@ def test_ekstre_araclarla_ucta_uca(
         ("s1", 2, False),
     ]
     with baglam.veritabani.okuma_islemi() as oturum:
-        assert hs.etkin_bakiye(oturum, nesne_id=hesap).bakiye_kurus == 0
+        assert (
+            hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap).bakiye_kurus == 0
+        )
 
     eksik = _tamamla(baglam, 1)
     assert eksik.durum is zarf.YanitDurumu.REDDEDILDI
@@ -246,7 +249,10 @@ def test_ekstre_araclarla_ucta_uca(
     assert tamam.okuma_id == 1 and tamam.hedef_surumu == 4
     assert tamam.sonraki_adim == mcp_araclari.SONRAKI_KAYITLI
     with baglam.veritabani.okuma_islemi() as oturum:
-        assert hs.etkin_bakiye(oturum, nesne_id=hesap).bakiye_kurus == 1_250_00
+        assert (
+            hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap).bakiye_kurus
+            == 1_250_00
+        )
 
     getir = _calistir(
         baglam,
@@ -426,7 +432,9 @@ def test_okuma_baslat_arsiv_eksik_ve_belge_yok(
 def test_sunucu_uzerinden_belge_araclari(
     baglam: mcp_araclari.AracBaglami, hesap: int
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(baglam.ayarlar, "0001", baglam.veritabani)
+    sunucu = mcp_kapisi.sunucu_kur(
+        baglam.ayarlar, sema.BEKLENEN_SEMA_SURUMU, baglam.veritabani
+    )
     assert {a.name for a in anyio.run(sunucu.list_tools)} == set(mcp_kapisi.YETENEKLER)
     semalar = {a.name: a.input_schema for a in anyio.run(sunucu.list_tools)}
     hareket = semalar[mcp_kapisi.ARAC_HAREKET_YAZ]["$defs"]["HesapHareketiGirdi"]
@@ -479,6 +487,7 @@ def test_sunucu_uzerinden_belge_araclari(
                             "yon": "ARTTIR",
                             "tutar_kurus": 500,
                             "islem_tarihi": "2026-08-01",
+                            "para_birimi": "TRY",
                         },
                     }
                 ],
@@ -493,7 +502,10 @@ def test_sunucu_uzerinden_belge_araclari(
     assert tamam["durum"] == "TAMAMLANDI" and tamam["belge_kaydi"] == "KAYITLI"
     with baglam.veritabani.okuma_islemi() as oturum:
         assert nesneler.aktif_nesneyi_getir(oturum, hesap).id == hesap
-        assert hs.etkin_bakiye(oturum, nesne_id=hesap).bakiye_kurus == 500
+        assert (
+            hs.etkin_bakiye(oturum, para_birimi="TRY", nesne_id=hesap).bakiye_kurus
+            == 500
+        )
 
 
 # --- tamlık üç durum (karar 2026-09-17) ---------------------------------------------
@@ -534,7 +546,9 @@ def test_okunamadi_tamlik_araclarla_belgeyi_kayitli_yapmaz_sonra_degerle_kayitli
 def test_sunucu_uzerinden_eksik_tamlik_alani_sema_reddi_deger_sizdirmaz(
     baglam: mcp_araclari.AracBaglami,
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(baglam.ayarlar, "0001", baglam.veritabani)
+    sunucu = mcp_kapisi.sunucu_kur(
+        baglam.ayarlar, sema.BEKLENEN_SEMA_SURUMU, baglam.veritabani
+    )
     sema_ = {a.name: a.input_schema for a in anyio.run(sunucu.list_tools)}
     tamlik_semasi = sema_[mcp_kapisi.ARAC_OKUMA_BASLAT]["$defs"]["TamlikGirdi"]
     assert set(tamlik_semasi["required"]) == {

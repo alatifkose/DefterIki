@@ -9,7 +9,7 @@ import pytest
 from mcp.types import CallToolResult
 
 from defteriki import ayarlar as ay
-from defteriki import gunluk, mcp_araclari, mcp_kapisi, onaylar, zarf
+from defteriki import gunluk, mcp_araclari, mcp_kapisi, onaylar, sema, zarf
 from defteriki import sozlesmeler as sz
 from defteriki import veritabani as vt
 from defteriki.baslangic import ortami_hazirla
@@ -202,6 +202,7 @@ def test_paket_anahtari_satir_kayitlariyla_doner(
                         yon=sz.Yon.ARTTIR,
                         tutar_kurus=100,
                         islem_tarihi="2026-08-01",
+                        para_birimi="TRY",
                     ),
                 )
                 for n in range(2)
@@ -328,6 +329,7 @@ def kayitli_hesap(baglam: mcp_araclari.AracBaglami) -> int:
                             yon=sz.Yon(yon),
                             tutar_kurus=tutar,
                             islem_tarihi=tarih,
+                            para_birimi="TRY",
                         ),
                     )
                     for n, (yon, tutar, tarih) in enumerate(hareketler)
@@ -354,16 +356,18 @@ def test_sorgu_bakiye_yalniz_kayitli_belgeler(
         sonuc.durum is zarf.YanitDurumu.TAMAMLANDI and sonuc.nesne_id == kayitli_hesap
     )
     assert sonuc.icerik == {
-        "bakiye": {
-            "nesne_id": kayitli_hesap,
-            "eksen": "VARLIK",
-            "para_birimi": "TRY",
-            "tarih": None,
-            "arttir_kurus": 2_000_00,
-            "azalt_kurus": 600_00,
-            "bakiye_kurus": 1_400_00,
-            "bekleyen_kayit_sayisi": 1,
-        }
+        "bakiyeler": [
+            {
+                "nesne_id": kayitli_hesap,
+                "eksen": "VARLIK",
+                "para_birimi": "TRY",
+                "tarih": None,
+                "arttir_kurus": 2_000_00,
+                "azalt_kurus": 600_00,
+                "bakiye_kurus": 1_400_00,
+                "bekleyen_kayit_sayisi": 1,
+            }
+        ]
     }
     assert sonuc.bekleyen == 1 and "bekleyen kayıtlar toplamda yok" in (
         sonuc.sonraki_adim or ""
@@ -371,11 +375,11 @@ def test_sorgu_bakiye_yalniz_kayitli_belgeler(
 
     tarihli = _sorgu(baglam, rapor="bakiye", nesne_id=kayitli_hesap, tarih="2026-08-01")
     assert tarihli.icerik is not None
-    assert tarihli.icerik["bakiye"]["bakiye_kurus"] == 2_000_00
-    assert tarihli.icerik["bakiye"]["tarih"] == "2026-08-01"
+    assert tarihli.icerik["bakiyeler"][0]["bakiye_kurus"] == 2_000_00
+    assert tarihli.icerik["bakiyeler"][0]["tarih"] == "2026-08-01"
 
     borc = _sorgu(baglam, rapor="bakiye", nesne_id=kayitli_hesap, eksen=sz.Eksen.BORC)
-    assert borc.icerik is not None and borc.icerik["bakiye"]["bakiye_kurus"] == 0
+    assert borc.icerik is not None and borc.icerik["bakiyeler"] == []  # BORC etkisi yok
 
 
 def test_sorgu_hareketler_kayitli_bayragi_filtre_sayfa(
@@ -426,7 +430,9 @@ def test_sorgu_hatalari(baglam: mcp_araclari.AracBaglami, kayitli_hesap: int) ->
 def test_sunucu_uzerinden_durum_araclari(
     baglam: mcp_araclari.AracBaglami, kayitli_hesap: int
 ) -> None:
-    sunucu = mcp_kapisi.sunucu_kur(baglam.ayarlar, "0001", baglam.veritabani)
+    sunucu = mcp_kapisi.sunucu_kur(
+        baglam.ayarlar, sema.BEKLENEN_SEMA_SURUMU, baglam.veritabani
+    )
     assert {a.name for a in anyio.run(sunucu.list_tools)} == set(mcp_kapisi.YETENEKLER)
     assert len(mcp_kapisi.YETENEKLER) == 14
 
@@ -439,7 +445,7 @@ def test_sunucu_uzerinden_durum_araclari(
     bakiye = cagir(
         mcp_kapisi.ARAC_SORGU, {"girdi": {"rapor": "bakiye", "nesne_id": kayitli_hesap}}
     )
-    assert bakiye["icerik"]["bakiye"]["bakiye_kurus"] == 1_400_00
+    assert bakiye["icerik"]["bakiyeler"][0]["bakiye_kurus"] == 1_400_00
     serbest = cagir(
         mcp_kapisi.ARAC_SORGU,
         {"girdi": {"rapor": "SELECT * FROM kayit", "nesne_id": 1}},

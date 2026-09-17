@@ -64,7 +64,7 @@ class Etki:
     eksen: sz.Eksen
     yon: sz.Yon
     tutar_kurus: int
-    para_birimi: sz.ParaBirimi
+    para_birimi: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +162,7 @@ def hareket_yaz(
                     "eksen": e.eksen.value,
                     "yon": e.yon.value,
                     "tutar_kurus": e.tutar_kurus,
-                    "para_birimi": e.para_birimi.value,
+                    "para_birimi": e.para_birimi,
                 }
                 for e in taslak.etkiler
             ],
@@ -185,7 +185,7 @@ def hareket_yaz(
             islem_id=islem_id,
             gerekce=(
                 f"{taslak.islem_turu.value} nesne {etki.nesne_id} "
-                f"{etki.yon.value} {etki.tutar_kurus} {etki.para_birimi.value}; "
+                f"{etki.yon.value} {etki.tutar_kurus} {etki.para_birimi}; "
                 f"kaynak okuma_satir {satir_id}"
             ),
             sonraki_durum=sz.KayitDurumu.AKTIF.value,
@@ -277,7 +277,7 @@ def _taslak_icerigi(taslak: fk.HareketTaslagi) -> dict[str, Any]:
                 "eksen": e.eksen.value,
                 "yon": e.yon.value,
                 "tutar_kurus": e.tutar_kurus,
-                "para_birimi": e.para_birimi.value,
+                "para_birimi": e.para_birimi,
             }
             for e in taslak.etkiler
         ],
@@ -304,7 +304,7 @@ def _etki(satir: RowMapping) -> Etki:
         eksen=sz.Eksen(satir["eksen"]),
         yon=sz.Yon(satir["yon"]),
         tutar_kurus=int(satir["tutar_kurus"]),
-        para_birimi=sz.ParaBirimi(satir["para_birimi"]),
+        para_birimi=str(satir["para_birimi"]),
     )
 
 

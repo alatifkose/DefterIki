@@ -56,7 +56,7 @@ PROJE_KOKU = Path(__file__).resolve().parent.parent.parent
 ALEMBIC_INI = PROJE_KOKU / "alembic.ini"
 MIGRATIONS_DIZINI = PROJE_KOKU / "migrations"
 
-BEKLENEN_SEMA_SURUMU = "0001"
+BEKLENEN_SEMA_SURUMU = "0002"
 """Uygulamanın yazmayı kabul ettiği tek şema sürümü (``migrations/versions``)."""
 
 NAMING = {
@@ -293,7 +293,7 @@ etki = Table(
     CheckConstraint("tutar_kurus >= 0", name="tutar_negatif_degil"),
     _izinli("eksen", sz.Eksen, "eksen_izinli"),
     _izinli("yon", sz.Yon, "yon_izinli"),
-    _izinli("para_birimi", sz.ParaBirimi, "para_birimi_izinli"),
+    CheckConstraint("length(para_birimi) > 0", name="para_birimi_bos_degil"),
     Index(None, "nesne_id", "eksen", "para_birimi", "kayit_id"),
     sqlite_autoincrement=True,
 )

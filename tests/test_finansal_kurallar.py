@@ -19,6 +19,7 @@ def _hareket(**degisiklik: object) -> fk.HesapHareketi:
         "yon": "ARTTIR",
         "tutar_kurus": 12_345,
         "islem_tarihi": TARIH,
+        "para_birimi": "TRY",
     }
     alanlar.update(degisiklik)
     return fk.HesapHareketi(**alanlar)  # pyright: ignore[reportArgumentType]
@@ -35,9 +36,7 @@ def test_gecerli_hareket_tek_varlik_etkisi_uretir() -> None:
         islem_tarihi=TARIH,
         valor_tarihi=date(2026, 8, 16),
         aciklama="Maaş",
-        etkiler=(
-            fk.EtkiTaslagi(7, sz.Eksen.VARLIK, sz.Yon.AZALT, 12_345, sz.ParaBirimi.TRY),
-        ),
+        etkiler=(fk.EtkiTaslagi(7, sz.Eksen.VARLIK, sz.Yon.AZALT, 12_345, "TRY"),),
     )
 
 
@@ -98,9 +97,17 @@ def test_yon_izinli_degerler(yon: object) -> None:
         fk.hesap_hareketi_dogrula(_hareket(yon=yon))
 
 
-def test_try_disi_para_birimi() -> None:
-    with pytest.raises(sz.ParaBirimiDesteklenmiyor):
-        fk.hesap_hareketi_dogrula(_hareket(para_birimi="USD"))
+def test_para_birimi_belgeden_ne_gelirse_kabul() -> None:
+    """Kodda para birimi listesi yok: belgede ne yazıyorsa o saklanır."""
+    for kod in ("TRY", "USD", "EUR", "XAU", "tl"):
+        taslak = fk.hesap_hareketi_dogrula(_hareket(para_birimi=f" {kod} "))
+        assert taslak.etkiler[0].para_birimi == kod
+
+
+@pytest.mark.parametrize("deger", ["", "   ", None, 949, "TR Y", "A" * 17])
+def test_bos_ya_da_bicimsiz_para_birimi_reddedilir(deger: object) -> None:
+    with pytest.raises(sz.ParaBirimiGecersiz):
+        fk.hesap_hareketi_dogrula(_hareket(para_birimi=deger))
 
 
 @pytest.mark.parametrize(

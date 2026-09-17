@@ -39,6 +39,7 @@ METIN_HESAP_YOK = (
     "Aktif hesap yok. Cowork bir belge işleyip hesap önerdiğinde burada görünür."
 )
 METIN_HAREKET_YOK = "Bu hesapta hareket yok."
+METIN_BAKIYE_YOK = "Bakiye: hareket yok"
 METIN_KAYITLI = "Kayıtlı"
 METIN_KAYITLI_DEGIL = "Yazıldı, kayıtlı değil"
 TARIH_BICIMI = "%d.%m.%Y"
@@ -145,12 +146,16 @@ class HareketGorunumu(QWidget):
             self.bakiye_etiketi.setText(METIN_HESAP_YOK)
             self.hareket_tablosu.setRowCount(0)
             return
-        b = self._islevler.bakiye(nesne_id)
+        bakiyeler = self._islevler.bakiyeler(nesne_id)
         self.bakiye_etiketi.setText(
-            f"Bakiye: {tutar_metni(b.bakiye_kurus, b.para_birimi)} · "
-            f"giriş {tutar_metni(b.arttir_kurus, b.para_birimi)} · "
-            f"çıkış {tutar_metni(b.azalt_kurus, b.para_birimi)} · "
-            f"kayıtlı olmayan kayıt: {b.bekleyen_kayit_sayisi}"
+            " | ".join(
+                f"Bakiye: {tutar_metni(b.bakiye_kurus, b.para_birimi)} · "
+                f"giriş {tutar_metni(b.arttir_kurus, b.para_birimi)} · "
+                f"çıkış {tutar_metni(b.azalt_kurus, b.para_birimi)} · "
+                f"kayıtlı olmayan kayıt: {b.bekleyen_kayit_sayisi}"
+                for b in bakiyeler
+            )
+            or METIN_BAKIYE_YOK
         )
         hareketler = self._islevler.hareketler(nesne_id)
         self.hareket_tablosu.setRowCount(len(hareketler))

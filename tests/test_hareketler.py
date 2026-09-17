@@ -97,6 +97,7 @@ def _hareket(n: int, hesap: int, yon: str, tutar: int, gun: int) -> Any:
             yon=sz.Yon(yon),
             tutar_kurus=tutar,
             islem_tarihi=f"2026-02-{gun:02d}",
+            para_birimi="TRY",
             aciklama=f"açıklama {n}",
         ),
     )
@@ -205,18 +206,19 @@ def _sorgu_bakiye(baglam: mcp_araclari.AracBaglami, nesne_id: int) -> dict[str, 
         mcp_araclari.SorguGirdisi(rapor="bakiye", nesne_id=nesne_id),
     )
     assert z.icerik is not None
-    return dict(z.icerik["bakiye"])
+    return dict(z.icerik["bakiyeler"][0])
 
 
 # --- pencere işlevleri (6.3) ---------------------------------------------------------
 
 
 def test_tutar_metni() -> None:
-    assert pencere_islevleri.tutar_metni(0) == "0,00 TL"
-    assert pencere_islevleri.tutar_metni(125000) == "1.250,00 TL"
-    assert pencere_islevleri.tutar_metni(-2635) == "-26,35 TL"
-    assert pencere_islevleri.tutar_metni(123456789) == "1.234.567,89 TL"
+    assert pencere_islevleri.tutar_metni(0, "TRY") == "0,00 TRY"
+    assert pencere_islevleri.tutar_metni(125000, "TRY") == "1.250,00 TRY"
+    assert pencere_islevleri.tutar_metni(-2635, "TRY") == "-26,35 TRY"
+    assert pencere_islevleri.tutar_metni(123456789, "TRY") == "1.234.567,89 TRY"
     assert pencere_islevleri.tutar_metni(5, "USD") == "0,05 USD"
+    assert pencere_islevleri.tutar_metni(5, "TL") == "0,05 TL"  # kodda eşleme yok
 
 
 def test_hesaplar_yalniz_aktif_nesneler(
@@ -244,7 +246,7 @@ def test_bakiye_ve_hareketler_sorgu_araciyla_ayni(
     ekstreler: tuple[int, int, int],
 ) -> None:
     hesap, b1, b2 = ekstreler
-    b = islevler.bakiye(hesap)
+    (b,) = islevler.bakiyeler(hesap)
     sorgu = _sorgu_bakiye(baglam, hesap)
 
     assert (b.bakiye_kurus, b.arttir_kurus, b.azalt_kurus) == (
@@ -341,9 +343,12 @@ def test_bakiye_hareketler_ve_belgeler_gosterilir(
 
     assert gorunum.hesap_secimi.count() == 1 and gorunum.secili_nesne_id == hesap
     sorgu = _sorgu_bakiye(baglam, hesap)
+    bakiye_metni = pencere_islevleri.tutar_metni(
+        sorgu["bakiye_kurus"], sorgu["para_birimi"]
+    )
     assert gorunum.bakiye_etiketi.text() == (
-        f"Bakiye: {pencere_islevleri.tutar_metni(sorgu['bakiye_kurus'])} · "
-        "giriş 2.000,00 TL · çıkış 600,00 TL · kayıtlı olmayan kayıt: 1"
+        f"Bakiye: {bakiye_metni} · "
+        "giriş 2.000,00 TRY · çıkış 600,00 TRY · kayıtlı olmayan kayıt: 1"
     )
 
     t = gorunum.hareket_tablosu
@@ -355,9 +360,9 @@ def test_bakiye_hareketler_ve_belgeler_gosterilir(
     ]
     assert [_hucre(t, s, 2) for s in range(3)] == ["giriş", "çıkış", "çıkış"]
     assert [_hucre(t, s, 3) for s in range(3)] == [
-        "2.000,00 TL",
-        "600,00 TL",
-        "150,00 TL",
+        "2.000,00 TRY",
+        "600,00 TRY",
+        "150,00 TRY",
     ]
     assert [_hucre(t, s, 4) for s in range(3)] == [
         hareketler.METIN_KAYITLI,
@@ -448,7 +453,7 @@ def test_pencere_ikinci_sekme_degisiklikte_yenilenir_ve_720ye_sigar(
             _aktif_hesap(baglam, "ME", "n-me")
 
         assert pencere.hareketler.hesap_secimi.count() == 1
-        assert pencere.hareketler.bakiye_etiketi.text().startswith("Bakiye: 0,00 TL")
+        assert pencere.hareketler.bakiye_etiketi.text() == hareketler.METIN_BAKIYE_YOK
     finally:
         pencere.close()
         islevler.kapat()

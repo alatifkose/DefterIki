@@ -124,6 +124,7 @@ class Ortam:
                     yon=yon,
                     tutar_kurus=tutar,
                     islem_tarihi=tarih,
+                    para_birimi="TRY",
                 ),
                 islem_anahtari=self._anahtar("h"),
                 aktor=COWORK,
@@ -147,7 +148,9 @@ class Ortam:
         self, nesne_id: int | None = None, tarih: date | None = None
     ) -> hs.Bakiye:
         with self.db.okuma_islemi() as oturum:
-            return hs.etkin_bakiye(oturum, nesne_id=nesne_id or self.hesap, tarih=tarih)
+            return hs.etkin_bakiye(
+                oturum, para_birimi="TRY", nesne_id=nesne_id or self.hesap, tarih=tarih
+            )
 
     def hareketler(self, **filtre: object) -> list[hs.HareketOzeti]:
         with self.db.okuma_islemi() as oturum:
@@ -225,7 +228,9 @@ def test_baska_nesne_ve_baska_eksen_karismaz(ortam: Ortam) -> None:
     assert ortam.bakiye().bakiye_kurus == 700
     assert ortam.bakiye(nesne_id=gk).bakiye_kurus == 300
     with ortam.db.okuma_islemi() as oturum:
-        borc = hs.etkin_bakiye(oturum, nesne_id=ortam.hesap, eksen=sz.Eksen.BORC)
+        borc = hs.etkin_bakiye(
+            oturum, para_birimi="TRY", nesne_id=ortam.hesap, eksen=sz.Eksen.BORC
+        )
     assert borc.bakiye_kurus == 0 and borc.bekleyen_kayit_sayisi == 0
 
 
@@ -281,7 +286,7 @@ def test_hareket_listesi_sirali_filtreli_sayfali(ortam: Ortam) -> None:
     assert [h.tutar_kurus for h in ortam.hareketler(bitis=date(2026, 8, 2))] == [10, 20]
     sayfa = ortam.hareketler(sayfalama=sz.Sayfalama(sinir=1, baslangic=1))
     assert [h.tutar_kurus for h in sayfa] == [20]
-    assert hepsi[0].para_birimi is sz.ParaBirimi.TRY and hepsi[0].kayitli is False
+    assert hepsi[0].para_birimi == "TRY" and hepsi[0].kayitli is False
 
 
 # --- Hypothesis değişmezleri ------------------------------------------------------

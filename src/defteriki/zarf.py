@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from defteriki import sozlesmeler as sz
 
-TALIMAT_SURUMU = "0.4"
+TALIMAT_SURUMU = "0.5"
 """``docs/cowork.md`` sürümü; Cowork zarftan okur, talimatı buna göre seçer."""
 
 KOD_BEKLENMEYEN = "BEKLENMEYEN_HATA"
@@ -112,7 +112,7 @@ SONRAKI_ADIMLAR: dict[str, str] = {
     "NESNE_ENGELLI": "Vakayı ve izinli işlemi izle; yeni kimlikle engeli aşma.",
     "YENI_NESNE_ENGELI": "Şüphe çözülene kadar yeni nesne önerme; engeli aşma.",
     "TUTAR_GECERSIZ": "Kaynağa dön; yuvarlama ya da kur uydurma.",
-    "PARA_BIRIMI_DESTEKLENMIYOR": "Kaynağa dön; kur uydurma.",
+    "PARA_BIRIMI_GECERSIZ": "Kaynağa dön; para birimini belgeden aynen al, uydurma.",
     "ANAHTAR_ICERIK_CAKISMASI": (
         "Eski işi sorgula; farklı içerik için yeni işlem anahtarı üret."
     ),

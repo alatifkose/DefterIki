@@ -78,16 +78,16 @@ def test_koku(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_sistem_durumu_beklenen_alanlari_tasir(test_koku: Path) -> None:
-    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), "0001")
+    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), sema.BEKLENEN_SEMA_SURUMU)
 
     assert durum.ortam == "test"
-    assert durum.sema_surumu == "0001"
+    assert durum.sema_surumu == sema.BEKLENEN_SEMA_SURUMU
     assert durum.yetenekler == list(mcp_kapisi.YETENEKLER)
     assert durum.uygulama_surumu not in ("", mcp_kapisi.SURUM_BILINMIYOR)
 
 
 def test_sistem_durumu_yol_ve_ortam_degiskeni_icermez(test_koku: Path) -> None:
-    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), "0001")
+    durum = mcp_kapisi.sistem_durumu(ay.ayarlari_yukle(), sema.BEKLENEN_SEMA_SURUMU)
 
     metin = json.dumps(dataclasses.asdict(durum), ensure_ascii=False)
 
@@ -100,7 +100,7 @@ def test_sunucu_araclari_sunar(test_koku: Path) -> None:
     ayarlar = ay.ayarlari_yukle()
     veritabani = vt.Veritabani(test_koku / "mcp.sqlite3")
     try:
-        sunucu = mcp_kapisi.sunucu_kur(ayarlar, "0001", veritabani)
+        sunucu = mcp_kapisi.sunucu_kur(ayarlar, sema.BEKLENEN_SEMA_SURUMU, veritabani)
         araclar = anyio.run(sunucu.list_tools)
     finally:
         veritabani.kapat()

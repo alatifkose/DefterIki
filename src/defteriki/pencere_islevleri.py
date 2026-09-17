@@ -14,6 +14,7 @@ pencereye yerel saat olarak verilir (veritabanında UTC).
 Teslim 6.1: ``degisti_mi``. Teslim 6.2: ``bekleyenler``, ``talep_ayrintisi``,
 ``karar_ver``. Teslim 6.3: ``hesaplar``, ``bakiye``, ``hareketler``,
 ``belgeler``, ``belge_dosya_yolu``; para ``tutar_metni`` ile gösterilir.
+``bakiye`` para birimi başına ayrı döner; kodda para birimi yoktur.
 """
 
 from __future__ import annotations
@@ -240,18 +241,22 @@ class PencereIslevleri:
                 for n in nesneler_
             ]
 
-    def bakiye(self, nesne_id: int) -> BakiyeOzeti:
-        """Etkin bakiye (yalnız KAYITLI belgeler; ``hesaplamalar.etkin_bakiye``)."""
+    def bakiyeler(self, nesne_id: int) -> list[BakiyeOzeti]:
+        """Etkin bakiye, para birimi başına (yalnız KAYITLI belgeler;
+        ``hesaplamalar.etkin_bakiyeler``). Hareket yoksa boş liste."""
         with self._veritabani.okuma_islemi() as oturum:
-            b = hesaplamalar.etkin_bakiye(oturum, nesne_id=nesne_id)
-        return BakiyeOzeti(
-            nesne_id=b.nesne_id,
-            para_birimi=b.para_birimi.value,
-            arttir_kurus=b.arttir_kurus,
-            azalt_kurus=b.azalt_kurus,
-            bakiye_kurus=b.bakiye_kurus,
-            bekleyen_kayit_sayisi=b.bekleyen_kayit_sayisi,
-        )
+            liste = hesaplamalar.etkin_bakiyeler(oturum, nesne_id=nesne_id)
+        return [
+            BakiyeOzeti(
+                nesne_id=b.nesne_id,
+                para_birimi=b.para_birimi,
+                arttir_kurus=b.arttir_kurus,
+                azalt_kurus=b.azalt_kurus,
+                bakiye_kurus=b.bakiye_kurus,
+                bekleyen_kayit_sayisi=b.bekleyen_kayit_sayisi,
+            )
+            for b in liste
+        ]
 
     def hareketler(self, nesne_id: int) -> list[HareketSatiri]:
         """Nesnenin hareketleri tarih sırasıyla; kayıtlı bayrağı ve belgeleriyle."""
@@ -269,7 +274,7 @@ class PencereIslevleri:
                     aciklama=h.aciklama or "",
                     yon=h.yon.value,
                     tutar_kurus=h.tutar_kurus,
-                    para_birimi=h.para_birimi.value,
+                    para_birimi=h.para_birimi,
                     kayitli=h.kayitli,
                     belge_idleri=belgeler.kaydin_belge_idleri(oturum, h.kayit_id),
                 )
@@ -324,13 +329,13 @@ def yerel_saat(utc_zaman: datetime) -> datetime:
     return utc_zaman.replace(tzinfo=UTC).astimezone()
 
 
-def tutar_metni(kurus: int, para_birimi: str = "TRY") -> str:
-    """Kuruşu Türkçe para biçimine çevirir: ``-2635`` → ``-26,35 TL``."""
+def tutar_metni(kurus: int, para_birimi: str) -> str:
+    """Kuruşu Türkçe sayı biçimine çevirir ve para birimi kodunu olduğu gibi
+    ekler: ``-2635`` → ``-26,35 <kod>``. Kodda para birimi ya da simge eşlemesi yok."""
     isaret = "-" if kurus < 0 else ""
     lira, kalan = divmod(abs(kurus), 100)
     lira_metni = f"{lira:,}".replace(",", ".")
-    birim = "TL" if para_birimi == "TRY" else para_birimi
-    return f"{isaret}{lira_metni},{kalan:02d} {birim}"
+    return f"{isaret}{lira_metni},{kalan:02d} {para_birimi}"
 
 
 def _ozet(ozellikler: Sequence[nesneler.Ozellik]) -> str:

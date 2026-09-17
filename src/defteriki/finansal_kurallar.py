@@ -14,8 +14,8 @@ onlar Aşama 8'de yazılır. Tek nesne, tek etki.
 Tutar kuralları (K05, C09, S20): kuruş cinsinden pozitif tam sayı; ``float``,
 ``bool`` ve metin reddedilir, sessiz yuvarlama yoktur; sıfır hareket
 değildir; SQLite'ın 64 bit tam sayı sınırını aşan tutar taşma sayılır ve
-reddedilir. Para birimi yalnız TRY. İşlem tarihi zorunlu, valör isteğe bağlı;
-ikisi de ``date`` ya da ``YYYY-AA-GG`` metni.
+reddedilir. Para birimi belgeden gelir, listeyle karşılaştırılmaz. İşlem tarihi
+zorunlu, valör isteğe bağlı; ikisi de ``date`` ya da ``YYYY-AA-GG`` metni.
 """
 
 from __future__ import annotations
@@ -46,9 +46,10 @@ class HesapHareketi:
     yon: object
     tutar_kurus: object
     islem_tarihi: object
+    para_birimi: object
+    """Belgedeki para birimi; zorunlu, varsayılanı yok (koda gömülü tanım yok)."""
     valor_tarihi: object = None
     aciklama: object = None
-    para_birimi: object = sz.ParaBirimi.TRY
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +58,7 @@ class EtkiTaslagi:
     eksen: sz.Eksen
     yon: sz.Yon
     tutar_kurus: int
-    para_birimi: sz.ParaBirimi
+    para_birimi: str
 
 
 @dataclass(frozen=True, slots=True)
