@@ -1,20 +1,21 @@
-"""Ana pencere (Teslim 6.1: kabuk).
+"""Ana pencere (Teslim 6.1 kabuk, 6.2 karar kutusu).
 
-Başlık, orta alan ve durum çubuğu. Durum çubuğu ortamı, şema sürümünü ve
-son değişiklik zamanını (yerel saat) gösterir. Karar kutusu (6.2) ve
-bakiye/hareket görünümü (6.3) orta alana sonraki teslimlerde eklenir;
-``DegisiklikIzleyici.degisti`` sinyali onların yenileme kaynağıdır.
+Başlık, sekmeli orta alan ve durum çubuğu. Durum çubuğu solda veritabanı
+yolunu, sağda ortamı, şema sürümünü ve son değişiklik zamanını (yerel saat)
+gösterir. Değişiklik izleyicisi "veri değişti" deyince açık görünümler
+yenilenir; karar kutusu sekmesinin başlığı bekleyen sayısını taşır.
+Bakiye/hareket görünümü (6.3) ikinci sekme olarak eklenecek.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QLabel, QMainWindow, QStatusBar
+from PySide6.QtWidgets import QLabel, QMainWindow, QStatusBar, QTabWidget
 
 from defteriki.arayuz.degisiklik_izleme import VARSAYILAN_ARALIK_MS, DegisiklikIzleyici
+from defteriki.arayuz.karar_kutusu import KararKutusu
 from defteriki.baslangic import Hazirlik
 from defteriki.pencere_islevleri import PencereIslevleri
 
@@ -22,6 +23,7 @@ PENCERE_BASLIGI = "DEFTERIKI"
 PENCERE_GENISLIK = 1280
 PENCERE_YUKSEKLIK = 720
 METIN_DEGISIKLIK_YOK = "Değişiklik: henüz yok"
+SEKME_KARAR_KUTUSU = "Karar kutusu"
 
 
 class AnaPencere(QMainWindow):
@@ -37,13 +39,12 @@ class AnaPencere(QMainWindow):
         self.resize(PENCERE_GENISLIK, PENCERE_YUKSEKLIK)
         self.degisiklik_sayisi = 0
 
-        orta = QLabel(
-            f"{PENCERE_BASLIGI} — {ayarlar.ortam.value} ortamı\n"
-            f"Veritabanı: {ayarlar.veritabani_yolu}"
-        )
-        orta.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        orta.setWordWrap(True)  # uzun yol pencereyi genişletmesin
-        self.setCentralWidget(orta)
+        self.sekmeler = QTabWidget()
+        self.karar_kutusu = KararKutusu(islevler)
+        self.sekmeler.addTab(self.karar_kutusu, SEKME_KARAR_KUTUSU)
+        self.karar_kutusu.yenilendi.connect(self._karar_sekmesini_adlandir)
+        self._karar_sekmesini_adlandir(self.karar_kutusu.bekleyen_sayisi)
+        self.setCentralWidget(self.sekmeler)
 
         self.ortam_etiketi = QLabel(f"Ortam: {ayarlar.ortam.value}")
         self.sema_etiketi = QLabel(f"Şema: {hazirlik.sema_surumu}")
@@ -51,12 +52,20 @@ class AnaPencere(QMainWindow):
         cubuk = QStatusBar()
         for etiket in (self.ortam_etiketi, self.sema_etiketi, self.degisiklik_etiketi):
             cubuk.addPermanentWidget(etiket)
+        cubuk.showMessage(f"Veritabanı: {ayarlar.veritabani_yolu}")
         self.setStatusBar(cubuk)
 
         self.izleyici = DegisiklikIzleyici(islevler, yoklama_araligi_ms, self)
         self.izleyici.degisti.connect(self._degisikligi_goster)
+        self.izleyici.degisti.connect(self.karar_kutusu.yenile)
         self.izleyici.durdu.connect(self._izleme_durdu)
         self.izleyici.baslat()
+
+    def _karar_sekmesini_adlandir(self, bekleyen: int) -> None:
+        self.sekmeler.setTabText(
+            self.sekmeler.indexOf(self.karar_kutusu),
+            f"{SEKME_KARAR_KUTUSU} ({bekleyen})" if bekleyen else SEKME_KARAR_KUTUSU,
+        )
 
     def _degisikligi_goster(self) -> None:
         self.degisiklik_sayisi += 1

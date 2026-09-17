@@ -14,7 +14,8 @@ belge/hareket, durum/sorgu; geçici onay komutu) ve 5.3 (Cowork talimatı
 `docs/cowork.md` 0.1, gerçek ekstre denemesi başarılı, tekrar denemesi
 yazmadı) bitti; **Aşama 5 kapısı geçildi (2026-09-17)**, bulgular "Cowork
 talimatı" bölümünde. Aşama 6 (ilk pencere) sürüyor: 6.1 kabuk ve değişiklik
-izleme bitti (`uv run defteriki-arayuz`); 6.2 karar kutusu sırada.
+izleme, 6.2 karar kutusu (onay pencereden) bitti (`uv run
+defteriki-arayuz`); 6.3 bakiye ve hareket görünümü sırada.
 **Kararlar (2026-09-17, Abdüllatif):**
 `defter_tanimla`/`defter_listele` ve "seçili defter" tek defter kararıyla
 düştü; kullanıcı onayı Aşama 6'ya kadar geçici `defteriki-onay` komut
@@ -85,8 +86,11 @@ defterdir; ayrı defter yoktur (sözlük: Defter; Tam Plan C01 iptal). Şema ve
 * Pencere kabuğu ve değişiklik izleme (Teslim 6.1): `uv run defteriki-arayuz`,
   aynı hazırlık akışı, durum çubuğu, `Veritabani.degisiklik_sayaci()` ile
   başka süreçlerin yazdığını görme (`src/defteriki/arayuz/`)
+* Karar kutusu (Teslim 6.2): bekleyen talepler, hedef nesne ve özellikleri,
+  kutucukla şart seçimi, Onayla / Reddet / Ertele; `pencere_islevleri`
+  üzerinden `onaylar.karar_uygula` (`arayuz/karar_kutusu.py`)
 
-Henüz yok: karar kutusu (6.2), bakiye ve hareket görünümü (6.3), devreden
+Henüz yok: bakiye ve hareket görünümü (6.3), devreden
 bakiye kararı, diğer işlem sözleşmeleri (Aşama 8), mükerrerlik
 karşılaştırması (Aşama 7).
 
@@ -481,6 +485,49 @@ komut girişi `pyproject.toml`de; `arayuz/` altyapı modülü import etmez.
 yazması bir kez evet, iki yazma tek evet, soru yazmayı engellemez, kapat
 sonrası yeniden sorulabilir. `tests/test_veritabani.py`: sayaç başka
 bağlantının commit'iyle değişir, kilit tutmaz, `kapat` bağlantıyı bırakır.
+
+### Karar kutusu (Teslim 6.2)
+
+Kullanıcı onayı artık pencereden verilir; `defteriki-onay` komutu Aşama 6
+kapısına kadar yedek olarak durur, sonra silinir. Orta alan sekmelidir;
+ilk sekme "Karar kutusu (n)", n bekleyen sayısı.
+
+* `pencere_islevleri` (6.2 soruları): `bekleyenler()` BEKLIYOR talepler
+  eskiden yeniye, hedef nesnenin ilk üç özelliğiyle özet (`ad=Akbank;
+  tür=banka`), yerel saat; `talep_ayrintisi(talep_id)` talep, hedef nesne
+  (kimlik, seviye, durum, sürüm), üst nesne özetleri, özellikler (kimlik,
+  alan, değer, tür, önceden şart mı); `karar_ver(talep_id, gorulen_surum,
+  onaylandi, secilen_sartlar, gerekce)` → `onaylar.karar_uygula` (aktör
+  KULLANICI, `sz.simdi_utc()`), sonuç talep ve nesne durumu/sürümü. Erteleme
+  için işlev yok: karar verilmeyen talep BEKLIYOR kalır. Hatalar
+  (`HEDEF_SURUMU_DEGISTI`, `HEDEF_BULUNAMADI`, sonuçlanmış talep) olduğu
+  gibi yükselir; çeviri yapılmaz. `yerel_saat()` dilimsiz UTC → yerel.
+* `arayuz/karar_kutusu.py` (`KararKutusu`): solda liste ("Talep 2 ·
+  NESNE_ACILISI · ad=ME; iban=… · 17.09.2026 12:34"), sağda başlık, üstler,
+  özellik tablosu (Şart kutucuğu / Alan / Değer (tür)), gerekçe satırı,
+  Onayla / Reddet / Ertele, mesaj satırı. Onay pencerede görülen nesne
+  sürümüyle ve işaretli özellik kimlikleriyle (K14, 0..n) uygulanır; ret
+  şart göndermez. Sonuç mesajı: "Talep 2 ONAYLANDI; nesne 2 AKTIF (sürüm
+  2)." Hedef değiştiyse özel mesaj; talep başka yerden sonuçlanmışsa
+  "Karar uygulanamadı: …"; her iki hâlde liste yenilenir, yazma olmaz.
+  Ertele hiçbir şey yazmaz, seçimi kaldırır. `yenile()` seçili talebi
+  koruyarak listeyi yeniden çeker ve `yenilendi(sayı)` verir; pencere bunu
+  değişiklik izleyicisine bağlar, sekme başlığını günceller. Seçim yokken
+  düğmeler kapalı.
+* `AnaPencere`: `QTabWidget`, durum çubuğunun solunda veritabanı yolu.
+
+Test (`tests/test_karar_kutusu.py`): boş liste ve kapalı düğmeler;
+bekleyenler listelenir, seçim ayrıntıyı ve tabloyu doldurur; şart
+işaretleyip onayla → nesne AKTIF, şart kalıcı, liste kısalır, seçim
+kalkar; reddet → SILINDI; ertele hiçbir şey yazmaz; talep başka yerden
+sonuçlandıysa mesaj ve liste yenilenir, onay uygulanmaz; hedef sürümü
+değiştiyse özel mesaj ve yenileme; yenilemede seçim korunur; sekme başlığı
+bekleyen sayısını taşır ve Cowork'un yeni önerisiyle kendiliğinden
+yenilenir; pencere kapanıp açılınca bekleyenler yerinde (S19 ilk yarısı).
+`tests/test_pencere_islevleri.py` (6.2): boş liste, sıra ve özet, yerel
+saat, ayrıntı (üstler, özellikler), olmayan talep, şart seçimiyle onay,
+ret, sonuçlanmış talebe ikinci karar reddi, sürüm uyuşmazlığı, boş gerekçe
+None ve aktör KULLANICI.
 
 ## Veritabanı
 
